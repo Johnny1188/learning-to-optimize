@@ -112,3 +112,28 @@ class MNISTSimoidBatchNorm(MNISTNet):
         inp = F.log_softmax(self.layers["final_mat"](inp), dim=1)
         l = self.loss(inp, out)
         return l
+
+class MNISTReluBatchNorm(MNISTNet):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.activation = nn.ReLU()
+        self.batch_norm = MetaBatchNorm1d(
+            num_features=20,
+            **kwargs
+        )
+
+    def forward(self, loss):
+        inp, out = loss.sample()
+        inp = w(Variable(inp.view(inp.size()[0], 28*28)))
+        out = w(Variable(out))
+
+        cur_layer = 0
+        while f"mat_{cur_layer}" in self.layers:
+            inp = self.layers[f"mat_{cur_layer}"](inp)
+            inp = self.batch_norm(inp)
+            inp = self.activation(inp)
+            cur_layer += 1
+
+        inp = F.log_softmax(self.layers["final_mat"](inp), dim=1)
+        l = self.loss(inp, out)
+        return l
