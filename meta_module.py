@@ -175,7 +175,10 @@ class MetaBatchNorm1d(MetaModule):
         if self.affine:           
             self.register_buffer('weight', to_var(ignore.weight.data, requires_grad=True))
             self.register_buffer('bias', to_var(ignore.bias.data, requires_grad=True))
-            
+        else:
+            self.register_parameter('weight', None)
+            self.register_parameter('bias', None)
+
         if self.track_running_stats:
             self.register_buffer('running_mean', torch.zeros(self.num_features))
             self.register_buffer('running_var', torch.ones(self.num_features))
