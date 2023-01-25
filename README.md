@@ -18,7 +18,7 @@ The most important pieces of the code are in the Jupyter Notebook `main.ipynb`. 
 
 ## Results
 
-Deviations from the geometric constraints on gradients of the loss wrt the optimizee's parameters that arise from symmetries in the network architecture are shown below. All plots are for the same optimizee (a 2-layer MLP with Softmax at the output layer and different activation functions at the hidden layer - ReLU if no other is specified). Theory behind it can be found in [Neural Mechanics: Symmetry and Broken Conservation Laws in Deep Learning Dynamics](https://arxiv.org/abs/2012.04728).
+Below are shown deviations from the geometric constraints on gradients of the loss wrt the optimizee's parameters that arise from symmetries in the network architecture. All plots are for optimizees (MLPs) with 1 hidden layer (ReLU if no other is specified) and Softmax in the output layer. For the scale symmetry, additional Batch normalization is added (affine=True, track_running_stats=False) before the ReLU activation function. Theory behind it can be found in [Neural Mechanics: Symmetry and Broken Conservation Laws in Deep Learning Dynamics](https://arxiv.org/abs/2012.04728).
 
 
 ### Rescale symmetry (ReLU, Leaky ReLU, Linear, etc.)
