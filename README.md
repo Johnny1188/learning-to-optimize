@@ -18,8 +18,21 @@ The most important pieces of the code are in the Jupyter Notebook `main.ipynb`. 
 
 ## Results
 
-Below are shown deviations from the geometric constraints on gradients of the loss wrt the optimizee's parameters that arise from symmetries in the network architecture. All plots are for optimizees (MLPs) with 1 hidden layer (ReLU if no other is specified) and Softmax in the output layer. For the scale symmetry, additional Batch normalization is added (affine=True, track_running_stats=False) before the ReLU activation function. Theory behind it can be found in [Neural Mechanics: Symmetry and Broken Conservation Laws in Deep Learning Dynamics](https://arxiv.org/abs/2012.04728).
+Comparisons of L2O optimizers with Adam(lr=0.03) and SGD(lr=0.1, momentum=0.9) - from left to right: Optimizee with Sigmoid, ReLU, and ReLU with Batch normalization (L2O optimizer trained for each separately). All optimizees have 1 hidden layer of 20 neurons and Softmax in the output layer. Batch normalization - affine=True, track_running_stats=False.
+<p align="center">
+  <img src="./results/imgs/MNISTNet_50e.png" width="32%" alt="MNISTNet" />
+  <img src="./results/imgs/MNISTRelu_100e.png" width="32%" alt="MNISTRelu" />
+  <img src="./results/imgs/MNISTReluBatchNorm_affine_no_stats_tracking_75e.png" width="32%" alt="MNISTReluBatchNorm" />
+</p>
+<!--
+![MNISTNet|100](./results/imgs/MNISTNet_50e.png)
+![MNISTRelu](./results/imgs/MNISTRelu_100e.png)
+![MNISTReluBatchNorm](./results/imgs/MNISTReluBatchNorm_affine_no_stats_tracking_75e.png)
+-->
 
+Below are shown deviations from the geometric constraints on gradients of the loss wrt the optimizee's parameters that arise from symmetries in the network architecture. All plots are for optimizees (MLPs) with 1 hidden layer of 20 neurons (ReLU if no other is specified) and Softmax in the output layer. For the scale symmetry, additional Batch normalization is added (affine=True, track_running_stats=False) before the ReLU activation function. Theory behind it can be found in [Neural Mechanics: Symmetry and Broken Conservation Laws in Deep Learning Dynamics](https://arxiv.org/abs/2012.04728).
+
+*Note: All plots have different scales on the y-axis.*
 
 ### Rescale symmetry (ReLU, Leaky ReLU, Linear, etc.)
 
