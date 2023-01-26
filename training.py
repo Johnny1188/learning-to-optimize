@@ -45,6 +45,9 @@ def do_fit(opter, opter_optim, target_cls, optee_cls, unroll, n_iters, optee_upd
         cell_states2 = [w(Variable(torch.zeros(optee_n_params, opter.hidden_sz))) for _ in range(2)]
         offset = 0
         for name, p in optee.all_named_parameters():
+            if p.requires_grad == False: # batchnorm stats
+                result_params[name] = p
+                continue
             cur_sz = int(np.prod(p.size()))
             # We do this so the gradients are disconnected from the graph but we still get
             # gradients from the rest
@@ -94,7 +97,8 @@ def do_fit(opter, opter_optim, target_cls, optee_cls, unroll, n_iters, optee_upd
         else:
             # update the optimizee and optimizer's states
             for name, p in optee.all_named_parameters():
-                rsetattr(optee, name, result_params[name])
+                if p.requires_grad: # batchnorm stats
+                    rsetattr(optee, name, result_params[name])
             hidden_states = hidden_states2
             cell_states = cell_states2
             

@@ -192,7 +192,10 @@ class MetaBatchNorm1d(MetaModule):
                         self.training or not self.track_running_stats, self.momentum, self.eps)
             
     def named_leaves(self):
-        return [('weight', self.weight), ('bias', self.bias)]
+        named_leaves = [('weight', self.weight), ('bias', self.bias)]
+        if self.track_running_stats:
+            named_leaves += [('running_mean', self.running_mean), ('running_var', self.running_var)]
+        return named_leaves
 
 class MetaBatchNorm2d(MetaModule):
     def __init__(self, *args, **kwargs):
