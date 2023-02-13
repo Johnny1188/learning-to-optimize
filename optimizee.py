@@ -3,15 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from utils.others import w
 from meta_module import *
+from utils.others import w
 
 
 class MNISTNet(MetaModule):
     def __init__(self, layer_size=20, n_layers=1, **kwargs):
         super().__init__()
 
-        inp_size = 28*28
+        inp_size = 28 * 28
         self.layers = {}
         for i in range(n_layers):
             self.layers[f"mat_{i}"] = MetaLinear(inp_size, layer_size)
@@ -25,10 +25,10 @@ class MNISTNet(MetaModule):
 
     def all_named_parameters(self):
         return [(k, v) for k, v in self.named_parameters()]
-    
+
     def forward(self, loss):
         inp, out = loss.sample()
-        inp = w(Variable(inp.view(inp.size()[0], 28*28)))
+        inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
         out = w(Variable(out))
 
         cur_layer = 0
@@ -51,16 +51,24 @@ class MNISTNetBig(MNISTNet):
     def __init__(self, *args, **kwargs):
         super().__init__(layer_size=40, *args, **kwargs)
 
-        
+
 class MNISTRelu(MNISTNet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.activation = nn.ReLU()
 
+
 class MNISTLeakyRelu(MNISTNet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.activation = nn.LeakyReLU()
+
+
+class MNISTSoftplus(MNISTNet):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.activation = nn.Softplus()
+
 
 class MNISTReluResidualNormalization(MNISTNet):
     def __init__(self, residual_normalization_end_t, *args, **kwargs):
@@ -70,7 +78,7 @@ class MNISTReluResidualNormalization(MNISTNet):
 
     def forward(self, loss, t):
         inp, out = loss.sample()
-        inp = w(Variable(inp.view(inp.size()[0], 28*28)))
+        inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
         out = w(Variable(out))
 
         cur_layer = 0
@@ -80,7 +88,10 @@ class MNISTReluResidualNormalization(MNISTNet):
             if interpolation_factor < 1:
                 # apply layer normalization and mix with unnormalized input
                 normalized_residual_inp = F.layer_norm(inp, inp.size()[1:])
-                inp = interpolation_factor * inp + (1 - interpolation_factor) * normalized_residual_inp
+                inp = (
+                    interpolation_factor * inp
+                    + (1 - interpolation_factor) * normalized_residual_inp
+                )
             inp = self.activation(inp)
             cur_layer += 1
 
@@ -88,18 +99,16 @@ class MNISTReluResidualNormalization(MNISTNet):
         l = self.loss(inp, out)
         return l
 
+
 class MNISTSimoidBatchNorm(MNISTNet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.activation = nn.Sigmoid()
-        self.batch_norm = MetaBatchNorm1d(
-            num_features=20,
-            **kwargs
-        )
+        self.batch_norm = MetaBatchNorm1d(num_features=20, **kwargs)
 
     def forward(self, loss):
         inp, out = loss.sample()
-        inp = w(Variable(inp.view(inp.size()[0], 28*28)))
+        inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
         out = w(Variable(out))
 
         cur_layer = 0
@@ -113,18 +122,16 @@ class MNISTSimoidBatchNorm(MNISTNet):
         l = self.loss(inp, out)
         return l
 
+
 class MNISTReluBatchNorm(MNISTNet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.activation = nn.ReLU()
-        self.batch_norm = MetaBatchNorm1d(
-            num_features=20,
-            **kwargs
-        )
+        self.batch_norm = MetaBatchNorm1d(num_features=20, **kwargs)
 
     def forward(self, loss):
         inp, out = loss.sample()
-        inp = w(Variable(inp.view(inp.size()[0], 28*28)))
+        inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
         out = w(Variable(out))
 
         cur_layer = 0
