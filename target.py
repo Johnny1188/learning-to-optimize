@@ -1,10 +1,10 @@
 import os
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-from torchvision import datasets
 import torchvision
-import numpy as np
-
+from torchvision import datasets
 
 DATA_PATH = os.getenv("DATA_PATH")
 
@@ -15,24 +15,24 @@ class MNISTLoss:
             DATA_PATH,
             train=True,
             download=False,
-            transform=torchvision.transforms.ToTensor()
+            transform=torchvision.transforms.ToTensor(),
         )
         indices = list(range(len(dataset)))
         np.random.RandomState(10).shuffle(indices)
         if training:
-            indices = indices[:len(indices) // 2]
+            indices = indices[: len(indices) // 2]
         else:
-            indices = indices[len(indices) // 2:]
+            indices = indices[len(indices) // 2 :]
 
         self.loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=128,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices)
+            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices),
         )
 
         self.batches = []
         self.cur_batch = 0
-        
+
     def sample(self):
         if self.cur_batch >= len(self.batches):
             self.batches = []

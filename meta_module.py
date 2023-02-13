@@ -1,56 +1,61 @@
+import itertools
+import operator
+from collections import OrderedDict
+from itertools import islice
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 import torchvision
 from torch.autograd import Variable
-import itertools
-import operator
-from itertools import islice
-from collections import OrderedDict
+
 
 def to_var(x, requires_grad=True):
     if torch.cuda.is_available():
         x = x.cuda()
     return Variable(x, requires_grad=requires_grad)
 
+
 class MetaModule(nn.Module):
     # adopted from: Adrien Ecoffet https://github.com/AdrienLE
     def parameters(self):
-       for name, param in self.named_params(self):
+        for name, param in self.named_params(self):
             yield param
 
     def named_parameters(self):
-       for name, param in self.named_params(self):
+        for name, param in self.named_params(self):
             yield name, param
-    
+
     def named_leaves(self):
         return []
-    
+
     def named_submodules(self):
         return []
-    
-    def named_params(self, curr_module=None, memo=None, prefix=''):       
+
+    def named_params(self, curr_module=None, memo=None, prefix=""):
         if memo is None:
             memo = set()
 
-        if hasattr(curr_module, 'named_leaves'):
+        if hasattr(curr_module, "named_leaves"):
             for name, p in curr_module.named_leaves():
                 if p is not None and p not in memo:
                     memo.add(p)
-                    yield prefix + ('.' if prefix else '') + name, p
+                    yield prefix + ("." if prefix else "") + name, p
         else:
             for name, p in curr_module._parameters.items():
                 if p is not None and p not in memo:
                     memo.add(p)
-                    yield prefix + ('.' if prefix else '') + name, p
-                    
+                    yield prefix + ("." if prefix else "") + name, p
+
         for mname, module in curr_module.named_children():
-            submodule_prefix = prefix + ('.' if prefix else '') + mname
+            submodule_prefix = prefix + ("." if prefix else "") + mname
             for name, p in self.named_params(module, memo, submodule_prefix):
                 yield name, p
-    
-    def update_params(self, lr_inner, first_order=False, source_params=None, detach=False):
+
+    def update_params(
+        self, lr_inner, first_order=False, source_params=None, detach=False
+    ):
         if source_params is not None:
             for tgt, src in zip(self.named_params(self), source_params):
                 name_t, param_t = tgt
@@ -74,22 +79,22 @@ class MetaModule(nn.Module):
                     param = param.detach_()
                     self.set_param(self, name, param)
 
-    def set_param(self,curr_mod, name, param):
-        if '.' in name:
-            n = name.split('.')
+    def set_param(self, curr_mod, name, param):
+        if "." in name:
+            n = name.split(".")
             module_name = n[0]
-            rest = '.'.join(n[1:])
+            rest = ".".join(n[1:])
             for name, mod in curr_mod.named_children():
                 if module_name == name:
                     self.set_param(mod, rest, param)
                     break
         else:
             setattr(curr_mod, name, param)
-            
+
     def detach_params(self):
         for name, param in self.named_params(self):
-            self.set_param(self, name, param.detach())   
-                
+            self.set_param(self, name, param.detach())
+
     def copy(self, other, same_var=False):
         for name, param in other.named_params():
             if not same_var:
@@ -101,131 +106,173 @@ class MetaLinear(MetaModule):
     def __init__(self, *args, **kwargs):
         super().__init__()
         ignore = nn.Linear(*args, **kwargs)
-       
-        self.register_buffer('weight', to_var(ignore.weight.data, requires_grad=True))
-        self.register_buffer('bias', to_var(ignore.bias.data, requires_grad=True))
+
+        self.register_buffer("weight", to_var(ignore.weight.data, requires_grad=True))
+        self.register_buffer("bias", to_var(ignore.bias.data, requires_grad=True))
         self.in_features = ignore.weight.size(1)
         self.out_features = ignore.weight.size(0)
-        
+
     def forward(self, x):
         return F.linear(x, self.weight, self.bias)
-    
+
     def named_leaves(self):
-        return [('weight', self.weight), ('bias', self.bias)]
-    
+        return [("weight", self.weight), ("bias", self.bias)]
+
+
 class MetaConv2d(MetaModule):
     def __init__(self, *args, **kwargs):
         super().__init__()
         ignore = nn.Conv2d(*args, **kwargs)
-        
+
         self.stride = ignore.stride
         self.padding = ignore.padding
         self.dilation = ignore.dilation
         self.groups = ignore.groups
-        
-        self.register_buffer('weight', to_var(ignore.weight.data, requires_grad=True))
-        
+
+        self.register_buffer("weight", to_var(ignore.weight.data, requires_grad=True))
+
         if ignore.bias is not None:
-            self.register_buffer('bias', to_var(ignore.bias.data, requires_grad=True))
+            self.register_buffer("bias", to_var(ignore.bias.data, requires_grad=True))
         else:
-            self.register_buffer('bias', None)
-        
+            self.register_buffer("bias", None)
+
     def forward(self, x):
-        return F.conv2d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
-    
+        return F.conv2d(
+            x,
+            self.weight,
+            self.bias,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.groups,
+        )
+
     def named_leaves(self):
-        return [('weight', self.weight), ('bias', self.bias)]
-    
+        return [("weight", self.weight), ("bias", self.bias)]
+
+
 class MetaConvTranspose2d(MetaModule):
     def __init__(self, *args, **kwargs):
         super().__init__()
         ignore = nn.ConvTranspose2d(*args, **kwargs)
-        
+
         self.stride = ignore.stride
         self.padding = ignore.padding
         self.dilation = ignore.dilation
         self.groups = ignore.groups
-        
-        self.register_buffer('weight', to_var(ignore.weight.data, requires_grad=True))
-        
+
+        self.register_buffer("weight", to_var(ignore.weight.data, requires_grad=True))
+
         if ignore.bias is not None:
-            self.register_buffer('bias', to_var(ignore.bias.data, requires_grad=True))
+            self.register_buffer("bias", to_var(ignore.bias.data, requires_grad=True))
         else:
-            self.register_buffer('bias', None)
-        
+            self.register_buffer("bias", None)
+
     def forward(self, x, output_size=None):
         output_padding = self._output_padding(x, output_size)
-        return F.conv_transpose2d(x, self.weight, self.bias, self.stride, self.padding,
-            output_padding, self.groups, self.dilation)
-       
+        return F.conv_transpose2d(
+            x,
+            self.weight,
+            self.bias,
+            self.stride,
+            self.padding,
+            output_padding,
+            self.groups,
+            self.dilation,
+        )
+
     def named_leaves(self):
-        return [('weight', self.weight), ('bias', self.bias)]
+        return [("weight", self.weight), ("bias", self.bias)]
+
 
 class MetaBatchNorm1d(MetaModule):
     def __init__(self, *args, **kwargs):
         super().__init__()
         ignore = nn.BatchNorm1d(*args, **kwargs)
-        
+
         self.num_features = ignore.num_features
         self.eps = ignore.eps
         self.momentum = ignore.momentum
         self.affine = ignore.affine
         self.track_running_stats = ignore.track_running_stats
 
-        if self.affine:           
-            self.register_buffer('weight', to_var(ignore.weight.data, requires_grad=True))
-            self.register_buffer('bias', to_var(ignore.bias.data, requires_grad=True))
+        if self.affine:
+            self.register_buffer(
+                "weight", to_var(ignore.weight.data, requires_grad=True)
+            )
+            self.register_buffer("bias", to_var(ignore.bias.data, requires_grad=True))
         else:
-            self.register_parameter('weight', None)
-            self.register_parameter('bias', None)
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
 
         if self.track_running_stats:
-            self.register_buffer('running_mean', torch.zeros(self.num_features))
-            self.register_buffer('running_var', torch.ones(self.num_features))
+            self.register_buffer("running_mean", torch.zeros(self.num_features))
+            self.register_buffer("running_var", torch.ones(self.num_features))
         else:
-            self.register_parameter('running_mean', None)
-            self.register_parameter('running_var', None)
+            self.register_parameter("running_mean", None)
+            self.register_parameter("running_var", None)
 
-        
     def forward(self, x):
-        return F.batch_norm(x, self.running_mean, self.running_var, self.weight, self.bias,
-                        self.training or not self.track_running_stats, self.momentum, self.eps)
-            
+        return F.batch_norm(
+            x,
+            self.running_mean,
+            self.running_var,
+            self.weight,
+            self.bias,
+            self.training or not self.track_running_stats,
+            self.momentum,
+            self.eps,
+        )
+
     def named_leaves(self):
-        named_leaves = [('weight', self.weight), ('bias', self.bias)]
+        named_leaves = [("weight", self.weight), ("bias", self.bias)]
         if self.track_running_stats:
-            named_leaves += [('running_mean', self.running_mean), ('running_var', self.running_var)]
+            named_leaves += [
+                ("running_mean", self.running_mean),
+                ("running_var", self.running_var),
+            ]
         return named_leaves
+
 
 class MetaBatchNorm2d(MetaModule):
     def __init__(self, *args, **kwargs):
         super().__init__()
         ignore = nn.BatchNorm2d(*args, **kwargs)
-        
+
         self.num_features = ignore.num_features
         self.eps = ignore.eps
         self.momentum = ignore.momentum
         self.affine = ignore.affine
         self.track_running_stats = ignore.track_running_stats
 
-        if self.affine:           
-            self.register_buffer('weight', to_var(ignore.weight.data, requires_grad=True))
-            self.register_buffer('bias', to_var(ignore.bias.data, requires_grad=True))
-            
-        if self.track_running_stats:
-            self.register_buffer('running_mean', torch.zeros(self.num_features))
-            self.register_buffer('running_var', torch.ones(self.num_features))
-        else:
-            self.register_parameter('running_mean', None)
-            self.register_parameter('running_var', None)
+        if self.affine:
+            self.register_buffer(
+                "weight", to_var(ignore.weight.data, requires_grad=True)
+            )
+            self.register_buffer("bias", to_var(ignore.bias.data, requires_grad=True))
 
-        
+        if self.track_running_stats:
+            self.register_buffer("running_mean", torch.zeros(self.num_features))
+            self.register_buffer("running_var", torch.ones(self.num_features))
+        else:
+            self.register_parameter("running_mean", None)
+            self.register_parameter("running_var", None)
+
     def forward(self, x):
-        return F.batch_norm(x, self.running_mean, self.running_var, self.weight, self.bias,
-                        self.training or not self.track_running_stats, self.momentum, self.eps)
-            
+        return F.batch_norm(
+            x,
+            self.running_mean,
+            self.running_var,
+            self.weight,
+            self.bias,
+            self.training or not self.track_running_stats,
+            self.momentum,
+            self.eps,
+        )
+
     def named_leaves(self):
-        return [('weight', self.weight), ('bias', self.bias)]
+        return [("weight", self.weight), ("bias", self.bias)]
+
 
 class MetaSequential(MetaModule):
     r"""A sequential container.
@@ -265,7 +312,7 @@ class MetaSequential(MetaModule):
         size = len(self)
         idx = operator.index(idx)
         if not -size <= idx < size:
-            raise IndexError('index {} is out of range'.format(idx))
+            raise IndexError("index {} is out of range".format(idx))
         idx %= size
         return next(islice(iterator, idx, None))
 
@@ -334,7 +381,7 @@ class MetaModuleList(MetaModule):
         """Get the absolute index for the list of modules"""
         idx = operator.index(idx)
         if not (-len(self) <= idx < len(self)):
-            raise IndexError('index {} is out of range'.format(idx))
+            raise IndexError("index {} is out of range".format(idx))
         if idx < 0:
             idx += len(self)
         return str(idx)
@@ -384,7 +431,6 @@ class MetaModuleList(MetaModule):
             self._modules[str(i)] = self._modules[str(i - 1)]
         self._modules[str(index)] = module
 
-
     def append(self, module):
         r"""Appends a given module to the end of the list.
 
@@ -394,7 +440,6 @@ class MetaModuleList(MetaModule):
         self.add_module(str(len(self)), module)
         return self
 
-
     def extend(self, modules):
         r"""Appends modules from a Python iterable to the end of the list.
 
@@ -402,13 +447,14 @@ class MetaModuleList(MetaModule):
             modules (iterable): iterable of modules to append
         """
         if not isinstance(modules, container_abcs.Iterable):
-            raise TypeError("ModuleList.extend should be called with an "
-                            "iterable, but got " + type(modules).__name__)
+            raise TypeError(
+                "ModuleList.extend should be called with an "
+                "iterable, but got " + type(modules).__name__
+            )
         offset = len(self)
         for i, module in enumerate(modules):
             self.add_module(str(offset + i), module)
         return self
-
 
 
 class ModuleDict(MetaModule):
@@ -477,10 +523,8 @@ class ModuleDict(MetaModule):
         return key in self._modules
 
     def clear(self):
-        """Remove all items from the ModuleDict.
-        """
+        """Remove all items from the ModuleDict."""
         self._modules.clear()
-
 
     def pop(self, key):
         r"""Remove key from the ModuleDict and return its module.
@@ -492,24 +536,17 @@ class ModuleDict(MetaModule):
         del self[key]
         return v
 
-
     def keys(self):
-        r"""Return an iterable of the ModuleDict keys.
-        """
+        r"""Return an iterable of the ModuleDict keys."""
         return self._modules.keys()
 
-
     def items(self):
-        r"""Return an iterable of the ModuleDict key/value pairs.
-        """
+        r"""Return an iterable of the ModuleDict key/value pairs."""
         return self._modules.items()
 
-
     def values(self):
-        r"""Return an iterable of the ModuleDict values.
-        """
+        r"""Return an iterable of the ModuleDict values."""
         return self._modules.values()
-
 
     def update(self, modules):
         r"""Update the :class:`~MetaModuleDict` with the key-value pairs from a
@@ -524,9 +561,10 @@ class ModuleDict(MetaModule):
                 or an iterable of key-value pairs of type (string, :class:`~MetaModule`)
         """
         if not isinstance(modules, container_abcs.Iterable):
-            raise TypeError("ModuleDict.update should be called with an "
-                            "iterable of key/value pairs, but got " +
-                            type(modules).__name__)
+            raise TypeError(
+                "ModuleDict.update should be called with an "
+                "iterable of key/value pairs, but got " + type(modules).__name__
+            )
 
         if isinstance(modules, container_abcs.Mapping):
             if isinstance(modules, (OrderedDict, ModuleDict)):
@@ -538,45 +576,46 @@ class ModuleDict(MetaModule):
         else:
             for j, m in enumerate(modules):
                 if not isinstance(m, container_abcs.Iterable):
-                    raise TypeError("ModuleDict update sequence element "
-                                    "#" + str(j) + " should be Iterable; is" +
-                                    type(m).__name__)
+                    raise TypeError(
+                        "ModuleDict update sequence element "
+                        "#" + str(j) + " should be Iterable; is" + type(m).__name__
+                    )
                 if not len(m) == 2:
-                    raise ValueError("ModuleDict update sequence element "
-                                     "#" + str(j) + " has length " + str(len(m)) +
-                                     "; 2 is required")
+                    raise ValueError(
+                        "ModuleDict update sequence element "
+                        "#" + str(j) + " has length " + str(len(m)) + "; 2 is required"
+                    )
                 self[m[0]] = m[1]
 
     def forward(self):
         raise NotImplementedError()
 
 
-
 class LeNet(MetaModule):
     def __init__(self, n_out):
         super(LeNet, self).__init__()
-    
+
         layers = []
         layers.append(MetaConv2d(1, 6, kernel_size=5))
         layers.append(nn.ReLU(inplace=True))
-        layers.append(nn.MaxPool2d(kernel_size=2,stride=2))
+        layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
 
         layers.append(MetaConv2d(6, 16, kernel_size=5))
         layers.append(nn.ReLU(inplace=True))
-        layers.append(nn.MaxPool2d(kernel_size=2,stride=2))
-        
+        layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+
         layers.append(MetaConv2d(16, 120, kernel_size=5))
         layers.append(nn.ReLU(inplace=True))
-        
+
         self.main = nn.Sequential(*layers)
-        
+
         layers = []
         layers.append(MetaLinear(120, 84))
         layers.append(nn.ReLU(inplace=True))
         layers.append(MetaLinear(84, n_out))
-        
+
         self.fc_layers = nn.Sequential(*layers)
-        
+
     def forward(self, x):
         x = self.main(x)
         x = x.view(-1, 120)

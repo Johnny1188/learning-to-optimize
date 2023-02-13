@@ -1,7 +1,8 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import numpy as np
+
 from utils.others import w
 
 
@@ -22,11 +23,11 @@ class Optimizer(nn.Module):
         self.preproc = preproc
         self.preproc_factor = preproc_factor
         self.preproc_threshold = np.exp(-preproc_factor)
-        
+
     def forward(self, inp, hidden, cell):
         if self.preproc:
             # Implement preproc described in Appendix A
-            
+
             # Note: we do all this work on tensors, which means
             # the gradients won't propagate through inp. This
             # should be ok because the algorithm involves
@@ -34,11 +35,15 @@ class Optimizer(nn.Module):
             inp = inp.data
             inp2 = w(torch.zeros(inp.size()[0], 2))
             keep_grads = (torch.abs(inp) >= self.preproc_threshold).squeeze()
-            inp2[:, 0][keep_grads] = (torch.log(torch.abs(inp[keep_grads]) + 1e-8) / self.preproc_factor).squeeze()
+            inp2[:, 0][keep_grads] = (
+                torch.log(torch.abs(inp[keep_grads]) + 1e-8) / self.preproc_factor
+            ).squeeze()
             inp2[:, 1][keep_grads] = torch.sign(inp[keep_grads]).squeeze()
-            
+
             inp2[:, 0][~keep_grads] = -1
-            inp2[:, 1][~keep_grads] = (float(np.exp(self.preproc_factor)) * inp[~keep_grads]).squeeze()
+            inp2[:, 1][~keep_grads] = (
+                float(np.exp(self.preproc_factor)) * inp[~keep_grads]
+            ).squeeze()
             inp = w(Variable(inp2))
         hidden0, cell0 = self.recurs(inp, (hidden[0], cell[0]))
         hidden1, cell1 = self.recurs2(hidden0, (hidden[1], cell[1]))
