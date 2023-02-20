@@ -59,7 +59,7 @@ Below are shown deviations from the geometric constraints on gradients of the lo
 
 ### Comparison after regularizing the L2O optimizer against symmetry constraint deviations
 
-Below is shown the influence of regularizing the L2O optimizer during meta-training against deviations from the geometric constraints on gradients of the loss wrt the optimizee's parameters. In the legend of each plot, one can see the regularization strength and the target of regularization during the meta-training phase.
+Below is shown the influence of regularizing the L2O optimizer during meta-training against deviations from the geometric constraints on gradients of the loss wrt the optimizee's parameters. In the legend of each plot, one can see the regularization strength and the target of regularization during the meta-training phase (*note: "L2O - regularize: 0.1 * constraints" in the legend means that all symmetry constraint deviations were regularized - rescale, scale, and translation*).
 
 *Click to enlarge the plots*
 <table style="padding: 10px">
@@ -77,7 +77,7 @@ Below is shown the influence of regularizing the L2O optimizer during meta-train
             <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTNet_{}.png" width="100%" alt="MNISTNet to MNISTNet" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTRelu_{}.png" width="100%" alt="MNISTLeakyRelu to MNISTNet" />
+            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTNet_{}.png" width="100%" alt="MNISTLeakyRelu to MNISTNet" />
         </td>
         <td>
             <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTNet_{}.png" width="100%" alt="MNISTReluBatchNorm to MNISTNet" />
