@@ -24,7 +24,7 @@ List of available results:
     - [Rescale symmetry (ReLU, Leaky ReLU, Linear, etc.)](#rescale-symmetry-relu-leaky-relu-linear-etc)
     - [Translation symmetry (Softmax)](#translation-symmetry-softmax)
     - [Scale symmetry (Batch normalization)](#scale-symmetry-batch-normalization)
-- [Comparion after regularizing the L2O optimizer against symmetry constraint deviations](#comparison-after-regularizing-the-l2o-optimizer-against-symmetry-constraint-deviations)
+- [Comparison after regularizing the L2O optimizer against symmetry constraint deviations](#comparison-after-regularizing-the-l2o-optimizer-against-symmetry-constraint-deviations)
 
 ### Initial comparison
 Comparisons of L2O optimizers with Adam(lr=0.03) and SGD(lr=0.1, momentum=0.9) - from left to right: Optimizee with Sigmoid, ReLU, and ReLU with Batch normalization (L2O optimizer trained for each separately). All optimizees have 1 hidden layer of 20 neurons and Softmax in the output layer. Batch normalization - affine=True, track_running_stats=False.
