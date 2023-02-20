@@ -1,5 +1,10 @@
+import os
+
+import numpy as np
 import torch
 from torch import optim
+
+from utils.others import load_baseline_opter_ckpt, load_l2o_opter_ckpt
 
 
 def get_rescale_sym_constraint_deviation(W1, b, W2, W1_update, b_update, W2_update):
@@ -18,7 +23,7 @@ def get_rescale_sym_constraint_deviation(W1, b, W2, W1_update, b_update, W2_upda
         W1_update.flatten() @ W1.flatten()
         + b_update.flatten() @ b.flatten()
         - W2_update.flatten() @ W2.flatten()
-    ).item()
+    )
 
 
 def get_translation_sym_constraint_deviations(W_update, b_update):
@@ -35,7 +40,7 @@ def get_translation_sym_constraint_deviations(W_update, b_update):
     """
     inner_W_update = W_update.sum()  # <=> W_update.flatten() @ ind_vec
     inner_b_update = b_update.sum()  # <=> b_update.flatten() @ ind_vec
-    return inner_W_update.item(), inner_b_update.item()
+    return inner_W_update, inner_b_update
 
 
 def get_scale_sym_constraint_deviation(W, b, W_update, b_update):
@@ -52,7 +57,7 @@ def get_scale_sym_constraint_deviation(W, b, W_update, b_update):
     """
     inner_W_update = W_update.flatten() @ W.flatten()
     inner_b_update = b_update.flatten() @ b.flatten()
-    return inner_W_update.item() + inner_b_update.item()
+    return inner_W_update + inner_b_update
 
 
 def get_adam_param_update(
@@ -107,3 +112,222 @@ def get_baseline_opter_param_updates(optee, opter):
     else:
         raise NotImplementedError(f"Optimizer {type(opter)} not implemented")
     return optee_updates
+
+
+def validate_inputs_for_collecting_deviations(opter_name, phase):
+    assert opter_name in [
+        "Optimizer",
+        "SGD",
+        "Adam",
+    ], f"opter_cls {opter_name} not supported"
+    assert phase in ["meta_training", "meta_testing"], f"phase {phase} not supported"
+    assert (
+        phase != "meta_training" or opter_name == "Optimizer"
+    ), f"opter_cls {opter_name} not supported for phase {phase}"
+    return True
+
+
+def collect_rescale_sym_deviations(
+    config, opter_cls, opter_config=None, phase="meta_testing", ckpt_path_prefix=""
+):
+    """Collects get_rescale_sym_constraint_deviation() for all checkpoints saved during meta-testing.
+    Returns two numpy arrays, one for the deviations of the gradients and one for the deviations of the updates."""
+    ### check inputs
+    opter_name = opter_cls.__name__
+    if not validate_inputs_for_collecting_deviations(opter_name, phase):
+        raise ValueError("Invalid inputs")
+
+    ### collect deviations
+    rescale_sym_grad_deviations = []
+    rescale_sym_update_deviations = []
+    for iter_i in range(
+        config[phase]["ckpt_iter_freq"],
+        config[phase]["n_iters"] + 1,
+        config[phase]["ckpt_iter_freq"],
+    ):
+        ckpt_path = f"{ckpt_path_prefix}{iter_i}.pt"
+        if opter_name == "Optimizer":  # L2O
+            # load checkpoint
+            (
+                optee,
+                opter,
+                optee_grads,
+                optee_updates,
+                loss_history,
+            ) = load_l2o_opter_ckpt(
+                path=ckpt_path,
+                optee_cls=config[phase]["optee_cls"],
+                opter_cls=opter_cls,
+                optee_config=config[phase]["optee_config"],
+                opter_config=opter_config,
+            )
+        else:
+            # load checkpoint
+            optee, opter, optee_grads, loss_history = load_baseline_opter_ckpt(
+                path=ckpt_path,
+                optee_cls=config[phase]["optee_cls"],
+                opter_cls=opter_cls,
+                optee_config=config[phase]["optee_config"],
+                opter_config=opter_config,
+            )
+            # calculate optee updates
+            optee_updates = get_baseline_opter_param_updates(optee, opter)
+
+        # calculate deviations
+        rescale_sym_grad_deviations.append(
+            get_rescale_sym_constraint_deviation(
+                W1=optee.layers.mat_0.weight.cpu(),
+                b=optee.layers.mat_0.bias.cpu(),
+                W2=optee.layers.final_mat.weight.cpu(),
+                W1_update=optee_grads["layers.mat_0.weight"].cpu(),
+                b_update=optee_grads["layers.mat_0.bias"].cpu(),
+                W2_update=optee_grads["layers.final_mat.weight"].cpu(),
+            ).item()
+        )
+        rescale_sym_update_deviations.append(
+            get_rescale_sym_constraint_deviation(
+                W1=optee.layers.mat_0.weight.cpu(),
+                b=optee.layers.mat_0.bias.cpu(),
+                W2=optee.layers.final_mat.weight.cpu(),
+                W1_update=-1 * optee_updates["layers.mat_0.weight"].cpu(),
+                b_update=-1 * optee_updates["layers.mat_0.bias"].cpu(),
+                W2_update=-1 * optee_updates["layers.final_mat.weight"].cpu(),
+            ).item()
+        )
+
+    rescale_sym_grad_deviations = np.array(rescale_sym_grad_deviations)
+    rescale_sym_update_deviations = np.array(rescale_sym_update_deviations)
+    return rescale_sym_grad_deviations, rescale_sym_update_deviations
+
+
+def collect_translation_sym_deviations(
+    config, opter_cls, opter_config=None, phase="meta_testing", ckpt_path_prefix=""
+):
+    """Collects get_translation_sym_constraint_deviations() for all checkpoints saved during the given phase.
+    Returns two numpy arrays, one for the deviations of the gradients and one for the deviations of the updates."""
+    ### check inputs
+    opter_name = opter_cls.__name__
+    if not validate_inputs_for_collecting_deviations(opter_name, phase):
+        raise ValueError("Invalid inputs")
+
+    ### collect deviations
+    tranlation_sym_grad_deviations = []
+    tranlation_sym_update_deviations = []
+    for iter_i in range(
+        config[phase]["ckpt_iter_freq"],
+        config[phase]["n_iters"] + 1,
+        config[phase]["ckpt_iter_freq"],
+    ):
+        ckpt_path = f"{ckpt_path_prefix}{iter_i}.pt"
+        if opter_name == "Optimizer":  # L2O
+            # load checkpoint
+            (
+                optee,
+                opter,
+                optee_grads,
+                optee_updates,
+                loss_history,
+            ) = load_l2o_opter_ckpt(
+                path=ckpt_path,
+                optee_cls=config[phase]["optee_cls"],
+                opter_cls=opter_cls,
+                optee_config=config[phase]["optee_config"],
+                opter_config=opter_config,
+            )
+        else:
+            # load checkpoint
+            optee, opter, optee_grads, loss_history = load_baseline_opter_ckpt(
+                path=ckpt_path,
+                optee_cls=config[phase]["optee_cls"],
+                opter_cls=opter_cls,
+                optee_config=config[phase]["optee_config"],
+                opter_config=opter_config,
+            )
+            # calculate optee updates
+            optee_updates = get_baseline_opter_param_updates(optee, opter)
+
+        ### calcualte deviations
+        sym_constraint_devs = get_translation_sym_constraint_deviations(
+            W_update=optee_grads["layers.final_mat.weight"].cpu(),
+            b_update=optee_grads["layers.final_mat.bias"].cpu(),
+        )
+        tranlation_sym_grad_deviations.append([d.item() for d in sym_constraint_devs])
+
+        sym_constraint_devs = get_translation_sym_constraint_deviations(
+            W_update=-1 * optee_updates["layers.final_mat.weight"].cpu(),
+            b_update=-1 * optee_updates["layers.final_mat.bias"].cpu(),
+        )
+        tranlation_sym_update_deviations.append([d.item() for d in sym_constraint_devs])
+
+    tranlation_sym_grad_deviations = np.array(tranlation_sym_grad_deviations)
+    tranlation_sym_update_deviations = np.array(tranlation_sym_update_deviations)
+    return tranlation_sym_grad_deviations, tranlation_sym_update_deviations
+
+
+def collect_scale_sym_deviations(
+    config, opter_cls, opter_config=None, phase="meta_testing", ckpt_path_prefix=""
+):
+    """Collects get_scale_sym_constraint_deviation() for all checkpoints saved during meta-testing.
+    Returns two numpy arrays, one for the deviations of the gradients and one for the deviations of the updates."""
+    ### check inputs
+    opter_name = opter_cls.__name__
+    if not validate_inputs_for_collecting_deviations(opter_name, phase):
+        raise ValueError("Invalid inputs")
+
+    ### collect deviations
+    scale_sym_grad_deviations = []
+    scale_sym_update_deviations = []
+    for iter_i in range(
+        config[phase]["ckpt_iter_freq"],
+        config[phase]["n_iters"] + 1,
+        config[phase]["ckpt_iter_freq"],
+    ):
+        ckpt_path = f"{ckpt_path_prefix}{iter_i}.pt"
+        if opter_name == "Optimizer":  # L2O
+            # load checkpoint
+            (
+                optee,
+                opter,
+                optee_grads,
+                optee_updates,
+                loss_history,
+            ) = load_l2o_opter_ckpt(
+                path=ckpt_path,
+                optee_cls=config[phase]["optee_cls"],
+                opter_cls=opter_cls,
+                optee_config=config[phase]["optee_config"],
+                opter_config=opter_config,
+            )
+        else:
+            # load checkpoint
+            optee, opter, optee_grads, loss_history = load_baseline_opter_ckpt(
+                path=ckpt_path,
+                optee_cls=config[phase]["optee_cls"],
+                opter_cls=opter_cls,
+                optee_config=config[phase]["optee_config"],
+                opter_config=opter_config,
+            )
+            # calculate optee updates
+            optee_updates = get_baseline_opter_param_updates(optee, opter)
+
+        # calculate deviations
+        scale_sym_grad_deviations.append(
+            get_scale_sym_constraint_deviation(
+                W=optee.layers.mat_0.weight.cpu(),
+                b=optee.layers.mat_0.bias.cpu(),
+                W_update=optee_grads["layers.mat_0.weight"].cpu(),
+                b_update=optee_grads["layers.mat_0.bias"].cpu(),
+            ).item()
+        )
+        scale_sym_update_deviations.append(
+            get_scale_sym_constraint_deviation(
+                W=optee.layers.mat_0.weight.cpu(),
+                b=optee.layers.mat_0.bias.cpu(),
+                W_update=-1 * optee_updates["layers.mat_0.weight"].cpu(),
+                b_update=-1 * optee_updates["layers.mat_0.bias"].cpu(),
+            ).item()
+        )
+
+    scale_sym_grad_deviations = np.array(scale_sym_grad_deviations)
+    scale_sym_update_deviations = np.array(scale_sym_update_deviations)
+    return scale_sym_grad_deviations, scale_sym_update_deviations
