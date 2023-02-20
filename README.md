@@ -74,13 +74,13 @@ Below is shown the influence of regularizing the L2O optimizer during meta-train
             <p>20 hidden units, sigmoid</p>
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTNet_{}_meta_trained_on_MNISTNet.png" width="100%" alt="MNISTNet to MNISTNet" />
+            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTNet_{}.png" width="100%" alt="MNISTNet to MNISTNet" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTRelu_{}_meta_trained_on_MNISTLeakyRelu.png" width="100%" alt="MNISTLeakyRelu to MNISTNet" />
+            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTRelu_{}.png" width="100%" alt="MNISTLeakyRelu to MNISTNet" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTNet_{}_meta_trained_on_MNISTReluBatchNorm.png" width="100%" alt="MNISTReluBatchNorm to MNISTNet" />
+            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTNet_{}.png" width="100%" alt="MNISTReluBatchNorm to MNISTNet" />
         </td>
     </tr>
     <tr>
@@ -88,13 +88,13 @@ Below is shown the influence of regularizing the L2O optimizer during meta-train
             <p>20 hidden units, leaky ReLU</p>
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTLeakyRelu_{}_meta_trained_on_MNISTNet.png" width="100%" alt="MNISTNet to MNISTLeakyRelu" />
+            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTLeakyRelu_{}.png" width="100%" alt="MNISTNet to MNISTLeakyRelu" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTLeakyRelu_{}_meta_trained_on_MNISTLeakyRelu.png" width="100%" alt="MNISTLeakyRelu to MNISTLeakyRelu" />
+            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTLeakyRelu_{}.png" width="100%" alt="MNISTLeakyRelu to MNISTLeakyRelu" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTLeakyRelu_{}_meta_trained_on_MNISTReluBatchNorm.png" width="100%" alt="MNISTReluBatchNorm to MNISTLeakyRelu" />
+            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTLeakyRelu_{}.png" width="100%" alt="MNISTReluBatchNorm to MNISTLeakyRelu" />
         </td>
     </tr>
     <tr>
@@ -102,13 +102,13 @@ Below is shown the influence of regularizing the L2O optimizer during meta-train
             <p>20 hidden units, ReLU, batch normalization</p>
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTReluBatchNorm_{'affine': True, 'track_running_stats': False}_meta_trained_on_MNISTNet.png" width="100%" alt="MNISTNet to MNISTReluBatchNorm" />
+            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTReluBatchNorm_{'affine': True, 'track_running_stats': False}.png" width="100%" alt="MNISTNet to MNISTReluBatchNorm" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTReluBatchNorm_{'affine': True, 'track_running_stats': False}_meta_trained_on_MNISTLeakyRelu.png" width="100%" alt="MNISTLeakyRelu to MNISTReluBatchNorm" />
+            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTReluBatchNorm_{'affine': True, 'track_running_stats': False}.png" width="100%" alt="MNISTLeakyRelu to MNISTReluBatchNorm" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTReluBatchNorm_{'affine': True, 'track_running_stats': False}_meta_trained_on_MNISTReluBatchNorm.png" width="100%" alt="MNISTReluBatchNorm to MNISTReluBatchNorm" />
+            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTReluBatchNorm_{'affine': True, 'track_running_stats': False}.png" width="100%" alt="MNISTReluBatchNorm to MNISTReluBatchNorm" />
         </td>
     </tr>
     <tr>
@@ -116,13 +116,13 @@ Below is shown the influence of regularizing the L2O optimizer during meta-train
             <p>two layers with 20 hidden units each, sigmoid</p>
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTNet2Layer_{}_meta_trained_on_MNISTNet.png" width="100%" alt="MNISTNet to MNISTNet2Layer" />
+            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTNet2Layer_{}.png" width="100%" alt="MNISTNet to MNISTNet2Layer" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTNet2Layer_{}_meta_trained_on_MNISTLeakyRelu.png" width="100%" alt="MNISTLeakyRelu to MNISTNet2Layer" />
+            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTNet2Layer_{}.png" width="100%" alt="MNISTLeakyRelu to MNISTNet2Layer" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTNet2Layer_{}_meta_trained_on_MNISTReluBatchNorm.png" width="100%" alt="MNISTReluBatchNorm to MNISTNet2Layer" />
+            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTNet2Layer_{}.png" width="100%" alt="MNISTReluBatchNorm to MNISTNet2Layer" />
         </td>
     </tr>
     <tr>
@@ -130,13 +130,13 @@ Below is shown the influence of regularizing the L2O optimizer during meta-train
             <p>40 hidden units, sigmoid</p>
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTNetBig_{}_meta_trained_on_MNISTNet.png" width="100%" alt="MNISTNet to MNISTNetBig" />
+            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTNetBig_{}.png" width="100%" alt="MNISTNet to MNISTNetBig" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTNetBig_{}_meta_trained_on_MNISTLeakyRelu.png" width="100%" alt="MNISTLeakyRelu to MNISTNetBig" />
+            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTNetBig_{}.png" width="100%" alt="MNISTLeakyRelu to MNISTNetBig" />
         </td>
         <td>
-            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTNetBig_{}_meta_trained_on_MNISTReluBatchNorm.png" width="100%" alt="MNISTReluBatchNorm to MNISTNetBig" />
+            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTNetBig_{}.png" width="100%" alt="MNISTReluBatchNorm to MNISTNetBig" />
         </td>
 </table>
 
