@@ -26,8 +26,8 @@ class MNISTNet(MetaModule):
     def all_named_parameters(self):
         return [(k, v) for k, v in self.named_parameters()]
 
-    def forward(self, loss):
-        inp, out = loss.sample()
+    def forward(self, data, return_acc=False):
+        inp, out = data.sample()
         inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
         out = w(Variable(out))
 
@@ -39,6 +39,11 @@ class MNISTNet(MetaModule):
 
         inp = F.log_softmax(self.layers["final_mat"](inp), dim=1)
         l = self.loss(inp, out)
+
+        if return_acc:
+            acc = (inp.argmax(dim=1) == out).float().mean()
+            return l, acc
+
         return l
 
 
@@ -76,8 +81,8 @@ class MNISTReluResidualNormalization(MNISTNet):
         self.activation = nn.ReLU()
         self.residual_normalization_end_t = residual_normalization_end_t
 
-    def forward(self, loss, t):
-        inp, out = loss.sample()
+    def forward(self, data, t, return_acc=False):
+        inp, out = data.sample()
         inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
         out = w(Variable(out))
 
@@ -97,6 +102,11 @@ class MNISTReluResidualNormalization(MNISTNet):
 
         inp = F.log_softmax(self.layers["final_mat"](inp), dim=1)
         l = self.loss(inp, out)
+
+        if return_acc:
+            acc = (inp.argmax(dim=1) == out).float().mean()
+            return l, acc
+
         return l
 
 
@@ -106,8 +116,8 @@ class MNISTSimoidBatchNorm(MNISTNet):
         self.activation = nn.Sigmoid()
         self.batch_norm = MetaBatchNorm1d(num_features=20, **kwargs)
 
-    def forward(self, loss):
-        inp, out = loss.sample()
+    def forward(self, data, return_acc=False):
+        inp, out = data.sample()
         inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
         out = w(Variable(out))
 
@@ -120,6 +130,11 @@ class MNISTSimoidBatchNorm(MNISTNet):
 
         inp = F.log_softmax(self.layers["final_mat"](inp), dim=1)
         l = self.loss(inp, out)
+
+        if return_acc:
+            acc = (inp.argmax(dim=1) == out).float().mean()
+            return l, acc
+
         return l
 
 
@@ -129,8 +144,8 @@ class MNISTReluBatchNorm(MNISTNet):
         self.activation = nn.ReLU()
         self.batch_norm = MetaBatchNorm1d(num_features=20, **kwargs)
 
-    def forward(self, loss):
-        inp, out = loss.sample()
+    def forward(self, data, return_acc=False):
+        inp, out = data.sample()
         inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
         out = w(Variable(out))
 
@@ -143,4 +158,9 @@ class MNISTReluBatchNorm(MNISTNet):
 
         inp = F.log_softmax(self.layers["final_mat"](inp), dim=1)
         l = self.loss(inp, out)
+
+        if return_acc:
+            acc = (inp.argmax(dim=1) == out).float().mean()
+            return l, acc
+
         return l

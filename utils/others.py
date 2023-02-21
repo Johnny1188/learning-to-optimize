@@ -1,9 +1,30 @@
 import functools
+import os
 
 import torch
 from torch.autograd import Variable
 
 USE_CUDA = torch.cuda.is_available()
+
+
+def load_ckpt(dir_path):
+    ### load pretrained L2O optimizer model and config
+    ckpt = torch.load(os.path.join(dir_path, "l2o_optimizer.pt"))
+    config = ckpt["config"]
+    if "opter_config" not in config:  # TODO: fix this (it's here due to older ckpts)
+        config["opter_config"] = {
+            "preproc": config["meta_training"]["preproc"],
+        }
+        del config["meta_training"]["preproc"]
+
+    opter = w(
+        config["opter_cls"](
+            **config["opter_config"] if config["opter_config"] is not None else {}
+        )
+    )
+    opter.load_state_dict(ckpt["state_dict"])
+
+    return opter, config, ckpt
 
 
 def load_l2o_opter_ckpt(
@@ -18,13 +39,12 @@ def load_l2o_opter_ckpt(
         v.grad = optee_grads[k]
     optee_updates = ckpt["optimizee_updates"]  # predicted by l2o optimizer
 
-    # opter = OPTIMIZER_CLS(preproc=OPTIMIZER_PREPROC)
     opter = opter_cls(**opter_config if opter_config is not None else {})
     opter.load_state_dict(ckpt["optimizer"])
 
-    loss_history = ckpt["loss_history"]
+    metrics = ckpt["metrics"]
 
-    return optee, opter, optee_grads, optee_updates, loss_history
+    return optee, opter, optee_grads, optee_updates, metrics
 
 
 def load_baseline_opter_ckpt(
@@ -43,9 +63,9 @@ def load_baseline_opter_ckpt(
     )
     opter.load_state_dict(ckpt["optimizer"])
 
-    loss_history = ckpt["loss_history"]
+    metrics = ckpt["metrics"]
 
-    return optee, opter, optee_grads, loss_history
+    return optee, opter, optee_grads, metrics
 
 
 def w(v):
