@@ -99,6 +99,20 @@ Below is shown the influence of regularizing the L2O optimizer during meta-train
     </tr>
     <tr>
         <td>
+            <p>20 hidden units, ReLU</p>
+        </td>
+        <td>
+            <img src="./results/imgs/regularization/MNISTNet_meta_training/losses_comparison_MNISTRelu_{}.png" width="100%" alt="MNISTNet to MNISTRelu" />
+        </td>
+        <td>
+            <img src="./results/imgs/regularization/MNISTLeakyRelu_meta_training/losses_comparison_MNISTRelu_{}.png" width="100%" alt="MNISTLeakyRelu to MNISTRelu" />
+        </td>
+        <td>
+            <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTRelu_{}.png" width="100%" alt="MNISTReluBatchNorm to MNISTRelu" />
+        </td>
+    </tr>
+    <tr>
+        <td>
             <p>20 hidden units, ReLU, batch normalization</p>
         </td>
         <td>
