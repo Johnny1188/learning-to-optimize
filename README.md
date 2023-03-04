@@ -13,7 +13,12 @@ Combining Learning-to-Optimize (L2O) with insights about symmetries in network a
 
 
 ## Usage
-The most important pieces of the code are in the Jupyter Notebook `main.ipynb`. L2O Optimizer is implemented in `optimizer.py`, helper meta-modules are in `meta_modules.py`, and optimizee models are in `optimizee.py`. Both meta-training and meta-testing scripts are in `training.py` (meta-testing <=> pretrained L2O optimizer *trains/optimizes* the optimizee) and called from `main.ipynb`. Additionally, `target.py` contains the task on which optimizee is trained (MNIST).
+To install the package in an editable mode and forego any import errors, run:
+```bash
+pip install -e .
+```
+
+The most important pieces of the code are in the Jupyter Notebook `scripts/main.ipynb`. L2O Optimizer is implemented in `l2o/optimizer.py`, helper meta-modules are in `l2o/meta_modules.py`, and optimizee models are in `l2o/optimizee.py`. Both meta-training and meta-testing scripts are in `l2o/training.py` (meta-testing <=> pretrained L2O optimizer *trains/optimizes* the optimizee) and called from `scripts/main.ipynb`. Additionally, `l2o/data.py` contains the utils for data on which optimizee is trained (MNIST).
 
 
 ## Results
