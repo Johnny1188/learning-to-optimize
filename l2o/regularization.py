@@ -45,3 +45,8 @@ def regularize_updates_constraints(
         + regularize_updates_translation_constraints(updates, optee, lr=lr)
         * translation_mul
     )
+
+
+def regularize_update_norms(updates, optee, lr=1.0):
+    """Regularizes the norm of the updates."""
+    return sum([torch.norm(lr * u) for u in updates.values()])

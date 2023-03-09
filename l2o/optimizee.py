@@ -26,10 +26,15 @@ class MNISTNet(MetaModule):
     def all_named_parameters(self):
         return [(k, v) for k, v in self.named_parameters()]
 
-    def forward(self, data, return_acc=False):
-        inp, out = data.sample()
-        inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
-        out = w(Variable(out))
+    def forward(self, data=None, inp=None, out=None, return_acc=False):
+        assert (data is None) != (
+            inp is None and out is None
+        ), "Must provide either data or inp and out"
+
+        if data is not None:
+            inp, out = data.sample()
+            inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
+            out = w(Variable(out))
 
         cur_layer = 0
         while f"mat_{cur_layer}" in self.layers:
@@ -81,10 +86,15 @@ class MNISTReluResidualNormalization(MNISTNet):
         self.activation = nn.ReLU()
         self.residual_normalization_end_t = residual_normalization_end_t
 
-    def forward(self, data, t, return_acc=False):
-        inp, out = data.sample()
-        inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
-        out = w(Variable(out))
+    def forward(self, data=None, inp=None, out=None, return_acc=False):
+        assert (data is None) != (
+            inp is None and out is None
+        ), "Must provide either data or inp and out"
+
+        if data is not None:
+            inp, out = data.sample()
+            inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
+            out = w(Variable(out))
 
         cur_layer = 0
         interpolation_factor = min(1, t / self.residual_normalization_end_t)
@@ -116,10 +126,15 @@ class MNISTSimoidBatchNorm(MNISTNet):
         self.activation = nn.Sigmoid()
         self.batch_norm = MetaBatchNorm1d(num_features=20, **kwargs)
 
-    def forward(self, data, return_acc=False):
-        inp, out = data.sample()
-        inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
-        out = w(Variable(out))
+    def forward(self, data=None, inp=None, out=None, return_acc=False):
+        assert (data is None) != (
+            inp is None and out is None
+        ), "Must provide either data or inp and out"
+
+        if data is not None:
+            inp, out = data.sample()
+            inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
+            out = w(Variable(out))
 
         cur_layer = 0
         while f"mat_{cur_layer}" in self.layers:
@@ -144,10 +159,15 @@ class MNISTReluBatchNorm(MNISTNet):
         self.activation = nn.ReLU()
         self.batch_norm = MetaBatchNorm1d(num_features=20, **kwargs)
 
-    def forward(self, data, return_acc=False):
-        inp, out = data.sample()
-        inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
-        out = w(Variable(out))
+    def forward(self, data=None, inp=None, out=None, return_acc=False):
+        assert (data is None) != (
+            inp is None and out is None
+        ), "Must provide either data or inp and out"
+
+        if data is not None:
+            inp, out = data.sample()
+            inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
+            out = w(Variable(out))
 
         cur_layer = 0
         while f"mat_{cur_layer}" in self.layers:
@@ -214,12 +234,17 @@ class MNISTConv(MetaModule):
     def all_named_parameters(self):
         return [(k, v) for k, v in self.named_parameters()]
 
-    def forward(self, data, return_acc=False):
-        inp, out = data.sample()
-        B = inp.size()[0]
-        inp = w(Variable(inp))
-        out = w(Variable(out))
+    def forward(self, data=None, inp=None, out=None, return_acc=False):
+        assert (data is None) != (
+            inp is None and out is None
+        ), "Must provide either data or inp and out"
 
+        if data is not None:
+            inp, out = data.sample()
+            inp = w(Variable(inp))
+            out = w(Variable(out))
+
+        B = inp.size()[0]
         inp = self.conv_layers(inp)
         inp = inp.view(B, -1)
         inp = self.fc_layer(inp)

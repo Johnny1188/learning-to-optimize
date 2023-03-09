@@ -45,7 +45,7 @@ class Optimizer(nn.Module):
         # making sure that inp is already detached.
         inp = inp.data
         inp_preproc = w(torch.zeros(inp.size()[0], 2))
-        keep_inp_mask = (torch.abs(inp) >= self.preproc_threshold).squeeze()
+        keep_inp_mask = (torch.abs(inp) >= self.preproc_threshold).squeeze(dim=-1)
         inp_preproc[:, 0][keep_inp_mask] = (
             torch.log(torch.abs(inp[keep_inp_mask]) + 1e-8) / self.preproc_factor
         ).squeeze()
