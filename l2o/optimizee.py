@@ -68,6 +68,12 @@ class MNISTRelu(MNISTNet):
         self.activation = nn.ReLU()
 
 
+class MNISTReluBig2Layer(MNISTNet):
+    def __init__(self, *args, **kwargs):
+        super().__init__(layer_size=128, n_layers=2, *args, **kwargs)
+        self.activation = nn.ReLU()
+
+
 class MNISTLeakyRelu(MNISTNet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
