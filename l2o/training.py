@@ -22,6 +22,7 @@ def do_fit(
     unroll,
     n_iters,
     optee_updates_lr,
+    data_config=None,
     train_opter=True,
     log_unroll_losses=False,
     opter_updates_reg_func=None,
@@ -39,8 +40,12 @@ def do_fit(
         opter.eval()
         unroll = 1
 
-    train_data = data_cls(training=True)
-    test_data = data_cls(training=False)
+    train_data = data_cls(
+        training=True, **data_config if data_config is not None else {}
+    )
+    test_data = data_cls(
+        training=False, **data_config if data_config is not None else {}
+    )
     optee = w(optee_cls(**optee_config if optee_config is not None else {}))
     optee_n_params = sum(
         [int(np.prod(p.size())) for _, p in optee.all_named_parameters()]
@@ -191,6 +196,7 @@ def do_fit(
 def fit_optimizer(
     data_cls,
     optee_cls,
+    data_config=None,
     optee_config=None,
     opter_cls=Optimizer,
     opter_config=None,
@@ -208,18 +214,27 @@ def fit_optimizer(
     ckpt_iter_freq=None,
     ckpt_prefix="",
     ckpt_dir="",
+    load_ckpt=None,
+    start_from_epoch=0,
 ):
     if ckpt_iter_freq is not None:
         os.makedirs(ckpt_dir, exist_ok=True)
 
     opter = w(opter_cls(**opter_config if opter_config is not None else {}))
+
+    ### load checkpoint
+    if load_ckpt is not None:
+        print(f"... loading checkpoint from {load_ckpt} ...")
+        ckpt = torch.load(load_ckpt)
+        opter.load_state_dict(ckpt["optimizer"])
+
     meta_opt = optim.Adam(opter.parameters(), lr=opter_lr)
 
     best_opter = None
     best_loss = np.inf
     all_metrics = list()
 
-    for epoch_i in tqdm(range(n_epochs), "epochs"):
+    for epoch_i in tqdm(range(start_from_epoch, n_epochs), "epochs"):
         all_metrics.append({k: dict() for k in ["meta_training", "meta_testing"]})
 
         ### meta-train
@@ -228,6 +243,7 @@ def fit_optimizer(
                 opter=opter,
                 opter_optim=meta_opt,
                 data_cls=data_cls,
+                data_config=data_config,
                 optee_cls=optee_cls,
                 optee_config=optee_config,
                 unroll=unroll,
@@ -243,15 +259,15 @@ def fit_optimizer(
                 ckpt_dir=ckpt_dir,
             )
             for k, v in optim_run_metrics.items():
-                if k not in all_metrics[epoch_i]["meta_training"]:
-                    all_metrics[epoch_i]["meta_training"][k] = np.array(v)
+                if k not in all_metrics[-1]["meta_training"]:
+                    all_metrics[-1]["meta_training"][k] = np.array(v)
                 else:
-                    all_metrics[epoch_i]["meta_training"][k] += np.array(v)
+                    all_metrics[-1]["meta_training"][k] += np.array(v)
 
         ### average metrics and log
-        for k, v in all_metrics[epoch_i]["meta_training"].items():
+        for k, v in all_metrics[-1]["meta_training"].items():
             v = v / n_optim_runs_per_epoch
-            all_metrics[epoch_i]["meta_training"][k] = {
+            all_metrics[-1]["meta_training"][k] = {
                 "sum": np.sum(v),
                 "last": v[-1]
                 if (type(v) in (list, np.ndarray) and len(v) > 0)
@@ -260,7 +276,7 @@ def fit_optimizer(
 
         print(
             f"[{epoch_i + 1}/{n_epochs}] Meta-training metrics:"
-            f"\n{json.dumps(all_metrics[epoch_i]['meta_training'], indent=4, sort_keys=False)}"
+            f"\n{json.dumps(all_metrics[-1]['meta_training'], indent=4, sort_keys=False)}"
         )
 
         ### meta-test
@@ -269,6 +285,7 @@ def fit_optimizer(
                 opter=opter,
                 opter_optim=meta_opt,
                 data_cls=data_cls,
+                data_config=data_config,
                 optee_cls=optee_cls,
                 optee_config=optee_config,
                 unroll=unroll,
@@ -279,15 +296,15 @@ def fit_optimizer(
                 ckpt_iter_freq=None,
             )
             for k, v in optim_run_metrics.items():
-                if k not in all_metrics[epoch_i]["meta_testing"]:
-                    all_metrics[epoch_i]["meta_testing"][k] = np.sum(v)
+                if k not in all_metrics[-1]["meta_testing"]:
+                    all_metrics[-1]["meta_testing"][k] = np.sum(v)
                 else:
-                    all_metrics[epoch_i]["meta_testing"][k] += np.sum(v)
+                    all_metrics[-1]["meta_testing"][k] += np.sum(v)
 
         ### average metrics and log
-        for k, v in all_metrics[epoch_i]["meta_testing"].items():
+        for k, v in all_metrics[-1]["meta_testing"].items():
             v = v / n_tests
-            all_metrics[epoch_i]["meta_testing"][k] = {
+            all_metrics[-1]["meta_testing"][k] = {
                 "sum": np.sum(v),
                 "last": v[-1]
                 if (type(v) in (list, np.ndarray) and len(v) > 0)
@@ -296,16 +313,16 @@ def fit_optimizer(
 
         print(
             f"[{epoch_i + 1}/{n_epochs}] Meta-testing metrics:"
-            f"\n{json.dumps(all_metrics[epoch_i]['meta_testing'], indent=4, sort_keys=False)}"
+            f"\n{json.dumps(all_metrics[-1]['meta_testing'], indent=4, sort_keys=False)}"
         )
 
-        if all_metrics[epoch_i]["meta_testing"]["train_loss"]["sum"] < best_loss:
+        if all_metrics[-1]["meta_testing"]["train_loss"]["sum"] < best_loss:
             print(
                 f"[{epoch_i + 1}/{n_epochs}] New best training loss"
                 f"\n\t previous:\t {best_loss}"
-                f"\n\t current:\t {all_metrics[epoch_i]['meta_testing']['train_loss']['sum']}"
+                f"\n\t current:\t {all_metrics[-1]['meta_testing']['train_loss']['sum']}"
             )
-            best_loss = all_metrics[epoch_i]["meta_testing"]["train_loss"]["sum"]
+            best_loss = all_metrics[-1]["meta_testing"]["train_loss"]["sum"]
             best_opter = copy.deepcopy(opter.state_dict())
 
     return best_loss, all_metrics, best_opter

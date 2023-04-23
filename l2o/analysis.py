@@ -130,8 +130,10 @@ def validate_inputs_for_collecting_deviations(opter_name, phase):
 def collect_rescale_sym_deviations(
     config, opter_cls, opter_config=None, phase="meta_testing", ckpt_path_prefix=""
 ):
-    """Collects get_rescale_sym_constraint_deviation() for all checkpoints saved during meta-testing.
-    Returns two numpy arrays, one for the deviations of the gradients and one for the deviations of the updates."""
+    """
+    Collects get_rescale_sym_constraint_deviation() for all checkpoints saved during meta-testing.
+    Returns two numpy arrays, one for the deviations of the gradients and one for the deviations of the updates.
+    """
     ### check inputs
     opter_name = opter_cls.__name__
     if not validate_inputs_for_collecting_deviations(opter_name, phase):
@@ -203,8 +205,10 @@ def collect_rescale_sym_deviations(
 def collect_translation_sym_deviations(
     config, opter_cls, opter_config=None, phase="meta_testing", ckpt_path_prefix=""
 ):
-    """Collects get_translation_sym_constraint_deviations() for all checkpoints saved during the given phase.
-    Returns two numpy arrays, one for the deviations of the gradients and one for the deviations of the updates."""
+    """
+    Collects get_translation_sym_constraint_deviations() for all checkpoints saved during the given phase.
+    Returns two numpy arrays, one for the deviations of the gradients and one for the deviations of the updates.
+    """
     ### check inputs
     opter_name = opter_cls.__name__
     if not validate_inputs_for_collecting_deviations(opter_name, phase):
@@ -267,8 +271,10 @@ def collect_translation_sym_deviations(
 def collect_scale_sym_deviations(
     config, opter_cls, opter_config=None, phase="meta_testing", ckpt_path_prefix=""
 ):
-    """Collects get_scale_sym_constraint_deviation() for all checkpoints saved during meta-testing.
-    Returns two numpy arrays, one for the deviations of the gradients and one for the deviations of the updates."""
+    """
+    Collects get_scale_sym_constraint_deviation() for all checkpoints saved during meta-testing.
+    Returns two numpy arrays, one for the deviations of the gradients and one for the deviations of the updates.
+    """
     ### check inputs
     opter_name = opter_cls.__name__
     if not validate_inputs_for_collecting_deviations(opter_name, phase):

@@ -219,7 +219,7 @@ class MNISTConv(MetaModule):
         conv_layers.append(act_fn(inplace=True))
         conv_layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
 
-        self.conv_layers = nn.Sequential(*conv_layers)
+        self.conv_layers = MetaSequential(*conv_layers)
 
         ### fc layer
         self.fc_layer = MetaLinear(4 * 4 * 32, n_out)

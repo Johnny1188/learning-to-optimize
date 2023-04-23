@@ -124,6 +124,8 @@ class MetaConv2d(MetaModule):
         super().__init__()
         ignore = nn.Conv2d(*args, **kwargs)
 
+        self.kernel_size = ignore.kernel_size
+        self.out_channels = ignore.out_channels
         self.stride = ignore.stride
         self.padding = ignore.padding
         self.dilation = ignore.dilation
@@ -271,7 +273,13 @@ class MetaBatchNorm2d(MetaModule):
         )
 
     def named_leaves(self):
-        return [("weight", self.weight), ("bias", self.bias)]
+        named_leaves = [("weight", self.weight), ("bias", self.bias)]
+        if self.track_running_stats:
+            named_leaves += [
+                ("running_mean", self.running_mean),
+                ("running_var", self.running_var),
+            ]
+        return named_leaves
 
 
 class MetaSequential(MetaModule):
@@ -299,7 +307,7 @@ class MetaSequential(MetaModule):
     """
 
     def __init__(self, *args):
-        super(MetaSequential, self).__init__()
+        super().__init__()
         if len(args) == 1 and isinstance(args[0], OrderedDict):
             for key, module in args[0].items():
                 self.add_module(key, module)
@@ -338,7 +346,7 @@ class MetaSequential(MetaModule):
         return len(self._modules)
 
     def __dir__(self):
-        keys = super(Sequential, self).__dir__()
+        keys = super().__dir__()
         keys = [key for key in keys if not key.isdigit()]
         return keys
 
