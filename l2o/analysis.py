@@ -29,13 +29,13 @@ def get_rescale_sym_constraint_deviation(
     """
     if normalize_updates:
         W1_update = F.normalize(W1_update, dim=0)
-        b_update /= b_update.norm()
+        b_update /= b_update.norm() + 1e-8
         W2_update = F.normalize(W2_update, dim=0)
 
     if normalize_params:
-        W1 /= W1.norm()
-        b /= b.norm()
-        W2 /= W2.norm()
+        W1 /= W1.norm() + 1e-8
+        b /= b.norm() + 1e-8
+        W2 /= W2.norm() + 1e-8
 
     return (
         W1_update.flatten() @ W1.flatten()
@@ -65,7 +65,7 @@ def get_translation_sym_constraint_deviations(
     """
     if normalize_updates:
         W_update = F.normalize(W_update, dim=0)
-        b_update /= b_update.norm()
+        b_update /= b_update.norm() + 1e-8
 
     W_deviations = W_update.sum()
     b_deviations = b_update.sum()  # inner(b_update, all_ones)
@@ -89,11 +89,11 @@ def get_scale_sym_constraint_deviation(
     """
     if normalize_updates:
         W_update = F.normalize(W_update, dim=0)
-        b_update /= b_update.norm()
+        b_update /= b_update.norm() + 1e-8
 
     if normalize_params:
-        W /= W.norm()
-        b /= b.norm()
+        W /= W.norm() + 1e-8
+        b /= b.norm() + 1e-8
 
     W_deviations = W_update.flatten() @ W.flatten()
     b_deviations = b_update.flatten() @ b.flatten()

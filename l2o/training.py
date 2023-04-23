@@ -7,7 +7,6 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
-from tqdm import tqdm
 
 from l2o.meta_module import *
 from l2o.optimizer import Optimizer
@@ -234,11 +233,11 @@ def fit_optimizer(
     best_loss = np.inf
     all_metrics = list()
 
-    for epoch_i in tqdm(range(start_from_epoch, n_epochs), "epochs"):
+    for epoch_i in range(start_from_epoch, n_epochs):
         all_metrics.append({k: dict() for k in ["meta_training", "meta_testing"]})
 
         ### meta-train
-        for _ in tqdm(range(n_optim_runs_per_epoch), "optimization runs"):
+        for _ in range(n_optim_runs_per_epoch):
             optim_run_metrics = do_fit(
                 opter=opter,
                 opter_optim=meta_opt,
@@ -267,12 +266,7 @@ def fit_optimizer(
         ### average metrics and log
         for k, v in all_metrics[-1]["meta_training"].items():
             v = v / n_optim_runs_per_epoch
-            all_metrics[-1]["meta_training"][k] = {
-                "sum": np.sum(v),
-                "last": v[-1]
-                if (type(v) in (list, np.ndarray) and len(v) > 0)
-                else np.nan,
-            }
+            all_metrics[-1]["meta_training"][k] = {"sum": np.sum(v), "last": v[-1]}
 
         print(
             f"[{epoch_i + 1}/{n_epochs}] Meta-training metrics:"
@@ -280,50 +274,56 @@ def fit_optimizer(
         )
 
         ### meta-test
-        for _ in tqdm(range(n_tests), "tests"):
-            optim_run_metrics = do_fit(
-                opter=opter,
-                opter_optim=meta_opt,
-                data_cls=data_cls,
-                data_config=data_config,
-                optee_cls=optee_cls,
-                optee_config=optee_config,
-                unroll=unroll,
-                n_iters=n_iters,
-                optee_updates_lr=optee_updates_lr,
-                train_opter=False,
-                eval_iter_freq=eval_iter_freq,
-                ckpt_iter_freq=None,
-            )
-            for k, v in optim_run_metrics.items():
-                if k not in all_metrics[-1]["meta_testing"]:
-                    all_metrics[-1]["meta_testing"][k] = np.sum(v)
-                else:
-                    all_metrics[-1]["meta_testing"][k] += np.sum(v)
+        if n_tests > 0:
+            for _ in range(n_tests):
+                optim_run_metrics = do_fit(
+                    opter=opter,
+                    opter_optim=meta_opt,
+                    data_cls=data_cls,
+                    data_config=data_config,
+                    optee_cls=optee_cls,
+                    optee_config=optee_config,
+                    unroll=unroll,
+                    n_iters=n_iters,
+                    optee_updates_lr=optee_updates_lr,
+                    train_opter=False,
+                    eval_iter_freq=eval_iter_freq,
+                    ckpt_iter_freq=None,
+                )
+                for k, v in optim_run_metrics.items():
+                    if k not in all_metrics[-1]["meta_testing"]:
+                        all_metrics[-1]["meta_testing"][k] = np.array(v)
+                    else:
+                        all_metrics[-1]["meta_testing"][k] += np.array(v)
 
-        ### average metrics and log
-        for k, v in all_metrics[-1]["meta_testing"].items():
-            v = v / n_tests
-            all_metrics[-1]["meta_testing"][k] = {
-                "sum": np.sum(v),
-                "last": v[-1]
-                if (type(v) in (list, np.ndarray) and len(v) > 0)
-                else np.nan,
-            }
+            ### average metrics and log
+            for k, v in all_metrics[-1]["meta_testing"].items():
+                v = v / n_tests
+                all_metrics[-1]["meta_testing"][k] = {"sum": np.sum(v), "last": v[-1]}
 
-        print(
-            f"[{epoch_i + 1}/{n_epochs}] Meta-testing metrics:"
-            f"\n{json.dumps(all_metrics[-1]['meta_testing'], indent=4, sort_keys=False)}"
-        )
-
-        if all_metrics[-1]["meta_testing"]["train_loss"]["sum"] < best_loss:
             print(
-                f"[{epoch_i + 1}/{n_epochs}] New best training loss"
-                f"\n\t previous:\t {best_loss}"
-                f"\n\t current:\t {all_metrics[-1]['meta_testing']['train_loss']['sum']}"
+                f"[{epoch_i + 1}/{n_epochs}] Meta-testing metrics:"
+                f"\n{json.dumps(all_metrics[-1]['meta_testing'], indent=4, sort_keys=False)}"
             )
-            best_loss = all_metrics[-1]["meta_testing"]["train_loss"]["sum"]
-            best_opter = copy.deepcopy(opter.state_dict())
+
+            if all_metrics[-1]["meta_testing"]["train_loss"]["sum"] < best_loss:
+                print(
+                    f"[{epoch_i + 1}/{n_epochs}] New best loss"
+                    f"\n\t previous:\t {best_loss}"
+                    f"\n\t current:\t {all_metrics[-1]['meta_testing']['train_loss']['sum']} (at last iter: {all_metrics[-1]['meta_testing']['train_loss']['last']})"
+                )
+                best_loss = all_metrics[-1]["meta_testing"]["train_loss"]["sum"]
+                best_opter = copy.deepcopy(opter.state_dict())
+        else:
+            ### no meta-testing, so just save the best model based on meta-training
+            if all_metrics[-1]["meta_training"]["train_loss"]["sum"] < best_loss:
+                print(
+                    f"[{epoch_i + 1}/{n_epochs}] New best loss"
+                    f"\n\t previous:\t {best_loss}"
+                    f"\n\t current:\t {all_metrics[-1]['meta_training']['train_loss']['sum']:.3f} (at last iter: {all_metrics[-1]['meta_training']['train_loss']['last']:.3f})"
+                )
+                best_loss = all_metrics[-1]["meta_training"]["train_loss"]["sum"]
+                best_opter = copy.deepcopy(opter.state_dict())
 
     return best_loss, all_metrics, best_opter
 
