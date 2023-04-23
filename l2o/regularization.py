@@ -7,24 +7,33 @@ from l2o.analysis import (
 )
 
 
-def regularize_updates_translation_constraints(updates, optee, lr=1.0):
+def regularize_updates_translation_constraints(
+    updates, optee, lr=1.0, normalize_updates=False, normalize_params=False
+):
     cons_deviations = get_translation_sym_constraint_deviations(
         W_update=-1 * lr * updates["layers.final_mat.weight"],
         b_update=-1 * lr * updates["layers.final_mat.bias"],
+        normalize_updates=normalize_updates,
     )
     return torch.abs(cons_deviations[0]) + torch.abs(cons_deviations[1])
 
 
-def regularize_updates_scale_constraints(updates, optee, lr=1.0):
+def regularize_updates_scale_constraints(
+    updates, optee, lr=1.0, normalize_updates=False, normalize_params=False
+):
     return get_scale_sym_constraint_deviation(
         W=optee.layers.mat_0.weight.detach(),
         b=optee.layers.mat_0.bias.detach(),
         W_update=-1 * lr * updates["layers.mat_0.weight"],
         b_update=-1 * lr * updates["layers.mat_0.bias"],
+        normalize_updates=normalize_updates,
+        normalize_params=normalize_params,
     )
 
 
-def regularize_updates_rescale_constraints(updates, optee, lr=1.0):
+def regularize_updates_rescale_constraints(
+    updates, optee, lr=1.0, normalize_updates=False, normalize_params=False
+):
     return get_rescale_sym_constraint_deviation(
         W1=optee.layers.mat_0.weight.detach(),
         b=optee.layers.mat_0.bias.detach(),
@@ -32,18 +41,33 @@ def regularize_updates_rescale_constraints(updates, optee, lr=1.0):
         W1_update=-1 * lr * updates["layers.mat_0.weight"],
         b_update=-1 * lr * updates["layers.mat_0.bias"],
         W2_update=-1 * lr * updates["layers.final_mat.weight"],
+        normalize_updates=normalize_updates,
+        normalize_params=normalize_params,
     )
 
 
 def regularize_updates_constraints(
-    updates, optee, lr=1.0, rescale_mul=1 / 3, scale_mul=1 / 3, translation_mul=1 / 3
+    updates,
+    optee,
+    lr=1.0,
+    rescale_mul=1 / 3,
+    scale_mul=1 / 3,
+    translation_mul=1 / 3,
+    normalize_updates=False,
+    normalize_params=False,
 ):
     """Combines all regularization functions."""
+    kwargs = {
+        "updates": updates,
+        "optee": optee,
+        "lr": lr,
+        "normalize_updates": normalize_updates,
+        "normalize_params": normalize_params,
+    }
     return (
-        regularize_updates_rescale_constraints(updates, optee, lr=lr) * rescale_mul
-        + regularize_updates_scale_constraints(updates, optee, lr=lr) * scale_mul
-        + regularize_updates_translation_constraints(updates, optee, lr=lr)
-        * translation_mul
+        regularize_updates_rescale_constraints(**kwargs) * rescale_mul
+        + regularize_updates_scale_constraints(**kwargs) * scale_mul
+        + regularize_updates_translation_constraints(**kwargs) * translation_mul
     )
 
 

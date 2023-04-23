@@ -1,15 +1,23 @@
-import os
-
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch import optim
 
 from l2o.others import load_baseline_opter_ckpt, load_l2o_opter_ckpt
 
 
-def get_rescale_sym_constraint_deviation(W1, b, W2, W1_update, b_update, W2_update):
+def get_rescale_sym_constraint_deviation(
+    W1,
+    b,
+    W2,
+    W1_update,
+    b_update,
+    W2_update,
+    normalize_updates=False,
+    normalize_params=False,
+):
     """Applies to ReLU, LeakyReLU, Linear, ...
-    inner(W1_update, W1) + inner(b_update, b) - inner(W2_update, W2) = 0
+    inner(W1_gradient, W1) + inner(b_gradient, b) - inner(W2_gradient, W2) = 0
 
     See rescale symmetry in section 3 of the Neural Mechanics paper
     (https://arxiv.org/abs/2012.04728)
@@ -19,6 +27,16 @@ def get_rescale_sym_constraint_deviation(W1, b, W2, W1_update, b_update, W2_upda
     any other parameter updates (from Adam, L2O optimizer, etc.) need to be
     negated (otherwise the deviations will have the opposite sign).
     """
+    if normalize_updates:
+        W1_update = F.normalize(W1_update, dim=0)
+        b_update /= b_update.norm()
+        W2_update = F.normalize(W2_update, dim=0)
+
+    if normalize_params:
+        W1 /= W1.norm()
+        b /= b.norm()
+        W2 /= W2.norm()
+
     return (
         W1_update.flatten() @ W1.flatten()
         + b_update.flatten() @ b.flatten()
@@ -26,9 +44,11 @@ def get_rescale_sym_constraint_deviation(W1, b, W2, W1_update, b_update, W2_upda
     )
 
 
-def get_translation_sym_constraint_deviations(W_update, b_update):
+def get_translation_sym_constraint_deviations(
+    W_update, b_update, normalize_updates=False
+):
     """Applies to Softmax
-    inner(W_update, all_ones) = inner(b_update, all_ones) = 0
+    inner(W_gradient, all_ones) = inner(b_gradient, all_ones) = 0
 
     See translation symmetry in section 3 of the Neural Mechanics paper
     (https://arxiv.org/abs/2012.04728)
@@ -37,15 +57,27 @@ def get_translation_sym_constraint_deviations(W_update, b_update):
     which are negative updates in the case of SGD (just scaled by lr), hence
     any other parameter updates (from Adam, L2O optimizer, etc.) need to be
     negated (otherwise the deviations will have the opposite sign).
+    - Note: The way inner_W_update is computed is a shortcut for the following:
+        W_constraint_deviation = 0
+        all_ones = torch.ones(W_update.shape[0], 1)
+        for preceding_layer_neuron_i in range(W_update.shape[1]):
+            W_constraint_deviation += (W_update[:, preceding_layer_neuron_i] @ all_ones).item()
     """
-    inner_W_update = W_update.sum()  # <=> W_update.flatten() @ ind_vec
-    inner_b_update = b_update.sum()  # <=> b_update.flatten() @ ind_vec
-    return inner_W_update, inner_b_update
+    if normalize_updates:
+        W_update = F.normalize(W_update, dim=0)
+        b_update /= b_update.norm()
+
+    W_deviations = W_update.sum()
+    b_deviations = b_update.sum()  # inner(b_update, all_ones)
+
+    return W_deviations, b_deviations
 
 
-def get_scale_sym_constraint_deviation(W, b, W_update, b_update):
+def get_scale_sym_constraint_deviation(
+    W, b, W_update, b_update, normalize_updates=False, normalize_params=False
+):
     """Applies to Batch normalization
-    inner(W_update, W) + inner(b_update, b) = 0
+    inner(W_gradient, W) + inner(b_gradient, b) = 0
 
     See scale symmetry in section 3 of the Neural Mechanics paper
     (https://arxiv.org/abs/2012.04728)
@@ -55,9 +87,17 @@ def get_scale_sym_constraint_deviation(W, b, W_update, b_update):
     any other parameter updates (from Adam, L2O optimizer, etc.) need to be
     negated (otherwise the deviations will have the opposite sign).
     """
-    inner_W_update = W_update.flatten() @ W.flatten()
-    inner_b_update = b_update.flatten() @ b.flatten()
-    return inner_W_update + inner_b_update
+    if normalize_updates:
+        W_update = F.normalize(W_update, dim=0)
+        b_update /= b_update.norm()
+
+    if normalize_params:
+        W /= W.norm()
+        b /= b.norm()
+
+    W_deviations = W_update.flatten() @ W.flatten()
+    b_deviations = b_update.flatten() @ b.flatten()
+    return W_deviations + b_deviations
 
 
 def get_adam_param_update(
@@ -69,7 +109,7 @@ def get_adam_param_update(
         grad = grad + weight_decay * param
 
     biased_first_moment = beta1 * opter_state["exp_avg"] + (1 - beta1) * grad
-    biased_second_moment = beta2 * opter_state["exp_avg_sq"] + (1 - beta2) * grad**2
+    biased_second_moment = beta2 * opter_state["exp_avg_sq"] + (1 - beta2) * (grad**2)
 
     # bias correction
     bias_correction1 = 1 - beta1 ** (opter_state["step"] + 1)
@@ -128,7 +168,13 @@ def validate_inputs_for_collecting_deviations(opter_name, phase):
 
 
 def collect_rescale_sym_deviations(
-    config, opter_cls, opter_config=None, phase="meta_testing", ckpt_path_prefix=""
+    config,
+    opter_cls,
+    opter_config=None,
+    phase="meta_testing",
+    ckpt_path_prefix="",
+    normalize_updates=False,
+    normalize_params=False,
 ):
     """
     Collects get_rescale_sym_constraint_deviation() for all checkpoints saved during meta-testing.
@@ -184,6 +230,8 @@ def collect_rescale_sym_deviations(
                 W1_update=optee_grads["layers.mat_0.weight"].cpu(),
                 b_update=optee_grads["layers.mat_0.bias"].cpu(),
                 W2_update=optee_grads["layers.final_mat.weight"].cpu(),
+                normalize_updates=normalize_updates,
+                normalize_params=normalize_params,
             ).item()
         )
         rescale_sym_update_deviations.append(
@@ -194,6 +242,8 @@ def collect_rescale_sym_deviations(
                 W1_update=-1 * optee_updates["layers.mat_0.weight"].cpu(),
                 b_update=-1 * optee_updates["layers.mat_0.bias"].cpu(),
                 W2_update=-1 * optee_updates["layers.final_mat.weight"].cpu(),
+                normalize_updates=normalize_updates,
+                normalize_params=normalize_params,
             ).item()
         )
 
@@ -203,7 +253,12 @@ def collect_rescale_sym_deviations(
 
 
 def collect_translation_sym_deviations(
-    config, opter_cls, opter_config=None, phase="meta_testing", ckpt_path_prefix=""
+    config,
+    opter_cls,
+    opter_config=None,
+    phase="meta_testing",
+    ckpt_path_prefix="",
+    normalize_updates=False,
 ):
     """
     Collects get_translation_sym_constraint_deviations() for all checkpoints saved during the given phase.
@@ -254,12 +309,14 @@ def collect_translation_sym_deviations(
         sym_constraint_devs = get_translation_sym_constraint_deviations(
             W_update=optee_grads["layers.final_mat.weight"].cpu(),
             b_update=optee_grads["layers.final_mat.bias"].cpu(),
+            normalize_updates=normalize_updates,
         )
         tranlation_sym_grad_deviations.append([d.item() for d in sym_constraint_devs])
 
         sym_constraint_devs = get_translation_sym_constraint_deviations(
             W_update=-1 * optee_updates["layers.final_mat.weight"].cpu(),
             b_update=-1 * optee_updates["layers.final_mat.bias"].cpu(),
+            normalize_updates=normalize_updates,
         )
         tranlation_sym_update_deviations.append([d.item() for d in sym_constraint_devs])
 
@@ -269,7 +326,13 @@ def collect_translation_sym_deviations(
 
 
 def collect_scale_sym_deviations(
-    config, opter_cls, opter_config=None, phase="meta_testing", ckpt_path_prefix=""
+    config,
+    opter_cls,
+    opter_config=None,
+    phase="meta_testing",
+    ckpt_path_prefix="",
+    normalize_updates=False,
+    normalize_params=False,
 ):
     """
     Collects get_scale_sym_constraint_deviation() for all checkpoints saved during meta-testing.
@@ -323,6 +386,8 @@ def collect_scale_sym_deviations(
                 b=optee.layers.mat_0.bias.cpu(),
                 W_update=optee_grads["layers.mat_0.weight"].cpu(),
                 b_update=optee_grads["layers.mat_0.bias"].cpu(),
+                normalize_updates=normalize_updates,
+                normalize_params=normalize_params,
             ).item()
         )
         scale_sym_update_deviations.append(
@@ -331,6 +396,8 @@ def collect_scale_sym_deviations(
                 b=optee.layers.mat_0.bias.cpu(),
                 W_update=-1 * optee_updates["layers.mat_0.weight"].cpu(),
                 b_update=-1 * optee_updates["layers.mat_0.bias"].cpu(),
+                normalize_updates=normalize_updates,
+                normalize_params=normalize_params,
             ).item()
         )
 
