@@ -334,24 +334,34 @@ def fit_normal(
     opter_cls,
     n_tests=100,
     n_iters=100,
+    data_config=None,
     optee_config=None,
+    opter_config=None,
     eval_iter_freq=10,
     ckpt_iter_freq=None,
     ckpt_prefix="",
     ckpt_dir="",
-    **kwargs,
 ):
     if ckpt_iter_freq is not None:
         os.makedirs(ckpt_dir, exist_ok=True)
 
     metrics = {m: [] for m in ["train_loss", "train_acc", "test_loss", "test_acc"]}
+
     for _ in range(n_tests):
-        train_data = data_cls(training=False)
-        test_data = data_cls(training=False)
+        train_data = data_cls(
+            training=True, **data_config if data_config is not None else {}
+        )
+        test_data = data_cls(
+            training=False, **data_config if data_config is not None else {}
+        )
+
         optee = w(optee_cls(**optee_config if optee_config is not None else {}))
-        opter = opter_cls(optee.parameters(), **kwargs)
-        for k in metrics.keys():  # new test run
+        opter = opter_cls(optee.parameters(), **opter_config)
+
+        ### new test run
+        for k in metrics.keys():
             metrics[k].append([])
+
         for iter_i in range(1, n_iters + 1):
             ### train
             optee.train()
@@ -393,17 +403,42 @@ def fit_normal(
     return metrics
 
 
-# def find_best_lr_normal(target_cls, optee_cls, opter_cls, **extra_kwargs):
-#     best_loss = np.inf
-#     best_lr = 0.0
-#     for lr in tqdm([1.0, 0.3, 0.1, 0.03, 0.01, 0.003, 0.001, 0.0003, 0.0001, 0.00003, 0.00001], 'Learning rates'):
-#         try:
-#             loss = best_loss + 1.0
-#             loss = np.mean([np.sum(s) for s in fit_normal(target_cls=target_cls,
-#                 optee_cls=optee_cls, opter_cls=opter_cls, lr=lr, **extra_kwargs)])
-#         except RuntimeError:
-#             pass
-#         if loss < best_loss:
-#             best_loss = loss
-#             best_lr = lr
-#     return best_loss, best_lr
+def find_best_lr_normal(
+    data_cls,
+    optee_cls,
+    opter_cls,
+    n_tests=3,
+    n_iters=50,
+    optee_config=None,
+    opter_config=None,
+    consider_metric="train_loss",
+    lrs_to_try=None,
+):
+    assert consider_metric in ["train_loss", "test_loss"]
+
+    opter_config = copy.deepcopy(opter_config) if opter_config is not None else {}
+    if lrs_to_try is None:
+        lrs_to_try = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1, 1e0, 3e0]
+
+    best_loss_sum = np.inf
+    best_lr = None
+
+    for lr in lrs_to_try:
+        opter_config["lr"] = lr
+        metrics = fit_normal(
+            data_cls=data_cls,
+            optee_cls=optee_cls,
+            opter_cls=opter_cls,
+            n_tests=n_tests,
+            n_iters=n_iters,
+            optee_config=optee_config,
+            opter_config=opter_config,
+            eval_iter_freq=None if consider_metric == "train_loss" else 1,
+            ckpt_iter_freq=None,
+        )
+        train_loss_sum = metrics[consider_metric].sum()
+        if train_loss_sum < best_loss_sum:
+            best_loss_sum = train_loss_sum
+            best_lr = lr
+
+    return best_lr
