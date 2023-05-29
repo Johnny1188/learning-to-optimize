@@ -22,6 +22,7 @@ class MNIST:
         batch_size=128,
         only_classes=None,
         preload=False,
+        normalize=False,
         seed=DEFAULT_SEED,
     ):
         ### set seed
@@ -29,19 +30,22 @@ class MNIST:
         g.manual_seed(seed)
 
         ### init dataset and loader
+        trans = [transforms.ToTensor()]
+        if normalize:
+            trans.append(transforms.Normalize((0.1307,), (0.3081,)))
         if training:
             dataset = datasets.MNIST(
                 DATA_PATH,
                 train=True,
                 download=False,
-                transform=transforms.ToTensor(),
+                transform=transforms.Compose(trans),
             )
         else:
             dataset = datasets.MNIST(
                 DATA_PATH,
                 train=False,
                 download=False,
-                transform=transforms.ToTensor(),
+                transform=transforms.Compose(trans),
             )
 
         if only_classes is not None:

@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import time
 
 import numpy as np
 import torch
@@ -25,6 +26,7 @@ def do_fit(
     train_opter=True,
     log_unroll_losses=False,
     opter_updates_reg_func=None,
+    opter_updates_reg_func_config=None,
     reg_mul=1.0,
     optee_config=None,
     eval_iter_freq=10,
@@ -47,8 +49,13 @@ def do_fit(
     )
     optee = w(optee_cls(**optee_config if optee_config is not None else {}))
     optee_n_params = sum(
-        [int(np.prod(p.size())) for _, p in optee.all_named_parameters()]
+        [int(np.prod(p.size())) for _, p in optee.all_named_parameters() if p.requires_grad]
     )
+
+    ### save initial optee's parameters for regularization
+    optee_init_params = dict()
+    for name, p in optee.all_named_parameters():
+        optee_init_params[name] = p.data.detach().clone()
 
     ### initialize hidden and cell states
     hidden_states = [
@@ -102,7 +109,7 @@ def do_fit(
             )
 
             ### track updates for checkpointing
-            if ckpt_iter_freq and iteration % ckpt_iter_freq == 0:
+            if ckpt_iter_freq and (iteration % ckpt_iter_freq == 0 or iteration == 1):
                 updates_for_ckpt[name] = updates.view(*p.size()).detach()
 
             ### track updates for regularization
@@ -121,12 +128,29 @@ def do_fit(
 
         ### add regularization loss for opter
         if train_opter and opter_updates_reg_func is not None:
-            reg_loss = torch.abs(
-                reg_mul
-                * opter_updates_reg_func(
-                    updates=updates_for_reg, optee=optee, lr=optee_updates_lr
+            if "conservation_law_breaking" in opter_updates_reg_func.__name__:  # TODO: quick hack
+                reg_loss = torch.abs(
+                    reg_mul
+                    * opter_updates_reg_func(
+                        optee=optee,
+                        params_t0=optee_init_params,
+                        **opter_updates_reg_func_config
+                        if opter_updates_reg_func_config is not None
+                        else {},
+                    )
                 )
-            )
+            else:
+                reg_loss = torch.abs(
+                    reg_mul
+                    * opter_updates_reg_func(
+                        updates=updates_for_reg,
+                        optee=optee,
+                        lr=optee_updates_lr,
+                        **opter_updates_reg_func_config
+                        if opter_updates_reg_func_config is not None
+                        else {},
+                    )
+                )
             reg_losses = reg_loss if reg_losses is None else reg_losses + reg_loss
             updates_for_reg = dict()
             # add to metrics
@@ -139,7 +163,7 @@ def do_fit(
         metrics["train_acc"].append(train_acc.item())
 
         ### eval
-        if eval_iter_freq is not None and iteration % eval_iter_freq == 0:
+        if eval_iter_freq is not None and (iteration % eval_iter_freq == 0 or iteration == 1):
             optee.eval()
             test_loss, test_acc = optee(test_data, return_acc=True)
             metrics["test_loss"].append(test_loss.item())
@@ -147,14 +171,19 @@ def do_fit(
             optee.train()
 
         ### checkpoint
-        if ckpt_iter_freq and iteration % ckpt_iter_freq == 0:
+        if ckpt_iter_freq and (iteration % ckpt_iter_freq == 0 or iteration == 1):
             ckpt = {
                 "optimizee": optee.state_dict(),
                 "optimizee_grads": {k: v.grad for k, v in optee.all_named_parameters()},
                 "optimizee_updates": updates_for_ckpt,
                 "optimizer": opter.state_dict(),
+                "hidden_states": hidden_states,
+                "cell_states": cell_states,
                 "metrics": metrics,
             }
+            if not ckpt_dir.startswith(os.environ["CKPT_PATH"]):
+                print(f"[WARNING] ckpt_dir {ckpt_dir} does not start with CKPT_PATH, prepending CKPT_PATH to it")
+                ckpt_dir = os.path.join(os.environ["CKPT_PATH"], ckpt_dir)
             torch.save(ckpt, os.path.join(ckpt_dir, f"{ckpt_prefix}{iteration}.pt"))
             updates_for_ckpt = dict()
 
@@ -184,7 +213,7 @@ def do_fit(
         else:
             ### update the optimizee and optimizer's states
             for name, p in optee.all_named_parameters():
-                if p.requires_grad:  # batchnorm stats
+                if p.requires_grad:  # leave the batchnorm stats
                     rsetattr(optee, name, result_params[name])
             hidden_states = hidden_states2
             cell_states = cell_states2
@@ -207,6 +236,7 @@ def fit_optimizer(
     opter_lr=0.01,
     log_unroll_losses=False,
     opter_updates_reg_func=None,
+    opter_updates_reg_func_config=None,
     reg_mul=1.0,
     optee_updates_lr=1.0,
     eval_iter_freq=10,
@@ -215,29 +245,40 @@ def fit_optimizer(
     ckpt_dir="",
     load_ckpt=None,
     start_from_epoch=0,
+    verbose=1,
 ):
     if ckpt_iter_freq is not None:
         os.makedirs(ckpt_dir, exist_ok=True)
 
     opter = w(opter_cls(**opter_config if opter_config is not None else {}))
-
-    ### load checkpoint
-    if load_ckpt is not None:
-        print(f"... loading checkpoint from {load_ckpt} ...")
-        ckpt = torch.load(load_ckpt)
-        opter.load_state_dict(ckpt["optimizer"])
-
     meta_opt = optim.Adam(opter.parameters(), lr=opter_lr)
 
     best_opter = None
     best_loss = np.inf
     all_metrics = list()
+    
+    ### load checkpoint
+    if load_ckpt is not None:
+        print(f"... loading checkpoint from {load_ckpt} ...")
+        ckpt = torch.load(load_ckpt)
+        best_opter = ckpt["best_opter"]
+        best_loss = ckpt["best_loss"]
+        all_metrics = ckpt["metrics"]
+        opter.load_state_dict(ckpt["opter"])
+        meta_opt = optim.Adam(opter.parameters(), lr=opter_lr)
+        meta_opt.load_state_dict(ckpt["meta_opter"])
+        meta_opt.zero_grad()
+        opter.train()
 
+    ### meta-training epochs
     for epoch_i in range(start_from_epoch, n_epochs):
+        start_time = time.time()
+        if verbose > 0:
+            print(f"[{epoch_i + 1}/{n_epochs}]")
         all_metrics.append({k: dict() for k in ["meta_training", "meta_testing"]})
 
         ### meta-train
-        for _ in range(n_optim_runs_per_epoch):
+        for run_i in range(n_optim_runs_per_epoch):
             optim_run_metrics = do_fit(
                 opter=opter,
                 opter_optim=meta_opt,
@@ -251,27 +292,36 @@ def fit_optimizer(
                 train_opter=True,
                 log_unroll_losses=log_unroll_losses,
                 opter_updates_reg_func=opter_updates_reg_func,
+                opter_updates_reg_func_config=opter_updates_reg_func_config,
                 reg_mul=reg_mul,
                 eval_iter_freq=eval_iter_freq,
-                ckpt_iter_freq=ckpt_iter_freq,
+                ckpt_iter_freq=ckpt_iter_freq if run_i == n_optim_runs_per_epoch - 1 else None,
                 ckpt_prefix=f"{ckpt_prefix}{epoch_i}e_",
                 ckpt_dir=ckpt_dir,
             )
+            log_msg = f"  [{run_i + 1}/{n_optim_runs_per_epoch}]"
             for k, v in optim_run_metrics.items():
                 if k not in all_metrics[-1]["meta_training"]:
                     all_metrics[-1]["meta_training"][k] = np.array(v)
                 else:
                     all_metrics[-1]["meta_training"][k] += np.array(v)
+                if "acc" in k:
+                    log_msg += f"  {k}_last={v[-1]:.3f}"
+                else:
+                    log_msg += f"  {k}_sum={np.sum(v):.3f}  {k}_last={v[-1]:.3f}"
+            if verbose > 1:
+                print(log_msg)
 
         ### average metrics and log
         for k, v in all_metrics[-1]["meta_training"].items():
             v = v / n_optim_runs_per_epoch
             all_metrics[-1]["meta_training"][k] = {"sum": np.sum(v), "last": v[-1]}
 
-        print(
-            f"[{epoch_i + 1}/{n_epochs}] Meta-training metrics:"
-            f"\n{json.dumps(all_metrics[-1]['meta_training'], indent=4, sort_keys=False)}"
-        )
+        if verbose > 0:
+            print(
+                f"[{epoch_i + 1}/{n_epochs}] Meta-training metrics:"
+                f"\n{json.dumps(all_metrics[-1]['meta_training'], indent=4, sort_keys=False)}"
+            )
 
         ### meta-test
         if n_tests > 0:
@@ -301,29 +351,46 @@ def fit_optimizer(
                 v = v / n_tests
                 all_metrics[-1]["meta_testing"][k] = {"sum": np.sum(v), "last": v[-1]}
 
-            print(
-                f"[{epoch_i + 1}/{n_epochs}] Meta-testing metrics:"
-                f"\n{json.dumps(all_metrics[-1]['meta_testing'], indent=4, sort_keys=False)}"
-            )
+            if verbose > 0:
+                print(
+                    f"[{epoch_i + 1}/{n_epochs}] Meta-testing metrics:"
+                    f"\n{json.dumps(all_metrics[-1]['meta_testing'], indent=4, sort_keys=False)}"
+                )
 
             if all_metrics[-1]["meta_testing"]["train_loss"]["sum"] < best_loss:
-                print(
-                    f"[{epoch_i + 1}/{n_epochs}] New best loss"
-                    f"\n\t previous:\t {best_loss}"
-                    f"\n\t current:\t {all_metrics[-1]['meta_testing']['train_loss']['sum']} (at last iter: {all_metrics[-1]['meta_testing']['train_loss']['last']})"
-                )
+                if verbose > 0:
+                    print(
+                        f"[{epoch_i + 1}/{n_epochs}] New best loss"
+                        f"\n\t previous:\t {best_loss}"
+                        f"\n\t current:\t {all_metrics[-1]['meta_testing']['train_loss']['sum']} (at last iter: {all_metrics[-1]['meta_testing']['train_loss']['last']})"
+                    )
                 best_loss = all_metrics[-1]["meta_testing"]["train_loss"]["sum"]
                 best_opter = copy.deepcopy(opter.state_dict())
         else:
             ### no meta-testing, so just save the best model based on meta-training
             if all_metrics[-1]["meta_training"]["train_loss"]["sum"] < best_loss:
-                print(
-                    f"[{epoch_i + 1}/{n_epochs}] New best loss"
-                    f"\n\t previous:\t {best_loss}"
-                    f"\n\t current:\t {all_metrics[-1]['meta_training']['train_loss']['sum']:.3f} (at last iter: {all_metrics[-1]['meta_training']['train_loss']['last']:.3f})"
-                )
+                if verbose > 0:
+                    print(
+                        f"[{epoch_i + 1}/{n_epochs}] New best loss"
+                        f"\n\t previous:\t {best_loss}"
+                        f"\n\t current:\t {all_metrics[-1]['meta_training']['train_loss']['sum']:.3f} (at last iter: {all_metrics[-1]['meta_training']['train_loss']['last']:.3f})"
+                    )
                 best_loss = all_metrics[-1]["meta_training"]["train_loss"]["sum"]
                 best_opter = copy.deepcopy(opter.state_dict())
+
+        ### save ckpt
+        ckpt = {
+            "best_opter": best_opter if best_opter else None,
+            "best_loss": best_loss,
+            "opter": opter.state_dict(),
+            "meta_opter": meta_opt.state_dict(),
+            "metrics": all_metrics,
+        }
+        torch.save(ckpt, os.path.join(ckpt_dir, f"{epoch_i}.pt"))
+
+        end_time = time.time()
+        if verbose > 0:
+            print(f"[{epoch_i + 1}/{n_epochs}] Epoch took {end_time - start_time:.2f}s")
 
     return best_loss, all_metrics, best_opter
 
@@ -339,15 +406,15 @@ def fit_normal(
     opter_config=None,
     eval_iter_freq=10,
     ckpt_iter_freq=None,
-    ckpt_prefix="",
     ckpt_dir="",
+    save_ckpts_for_all_test_runs=False,
 ):
     if ckpt_iter_freq is not None:
         os.makedirs(ckpt_dir, exist_ok=True)
 
     metrics = {m: [] for m in ["train_loss", "train_acc", "test_loss", "test_acc"]}
 
-    for _ in range(n_tests):
+    for test_i in range(n_tests):
         train_data = data_cls(
             training=True, **data_config if data_config is not None else {}
         )
@@ -369,8 +436,9 @@ def fit_normal(
             train_loss, train_acc = optee(train_data, return_acc=True)
             train_loss.backward()
 
-            ### model checkpointing
-            if ckpt_iter_freq and iter_i % ckpt_iter_freq == 0:
+            ### model checkpointing - save only for the first test run if save_ckpts_for_all_test_runs is False
+            if ckpt_iter_freq and (iter_i % ckpt_iter_freq == 0 or iter_i == 1) \
+                and (test_i == 0 or save_ckpts_for_all_test_runs):
                 ckpt = {
                     "optimizee": optee.state_dict(),
                     "optimizee_grads": {
@@ -379,7 +447,7 @@ def fit_normal(
                     "optimizer": opter.state_dict(),
                     "metrics": metrics,
                 }
-                torch.save(ckpt, os.path.join(ckpt_dir, f"{ckpt_prefix}{iter_i}.pt"))
+                torch.save(ckpt, os.path.join(ckpt_dir, f"run{test_i}_{iter_i}.pt"))
 
             ### update (after checkpointing)
             opter.step()

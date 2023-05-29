@@ -3,7 +3,8 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 
-from l2o.others import load_baseline_opter_ckpt, load_l2o_opter_ckpt
+from l2o.others import (load_baseline_opter_ckpt, load_ckpt,
+                        load_l2o_opter_ckpt, w)
 
 
 def get_rescale_sym_constraint_deviation(
@@ -13,8 +14,6 @@ def get_rescale_sym_constraint_deviation(
     W1_update,
     b_update,
     W2_update,
-    normalize_updates=False,
-    normalize_params=False,
 ):
     """Applies to ReLU, LeakyReLU, Linear, ...
     inner(W1_gradient, W1) + inner(b_gradient, b) - inner(W2_gradient, W2) = 0
@@ -27,15 +26,15 @@ def get_rescale_sym_constraint_deviation(
     any other parameter updates (from Adam, L2O optimizer, etc.) need to be
     negated (otherwise the deviations will have the opposite sign).
     """
-    if normalize_updates:
-        W1_update = F.normalize(W1_update, dim=0)
-        b_update /= b_update.norm() + 1e-8
-        W2_update = F.normalize(W2_update, dim=0)
+    # if normalize_updates:
+    #     W1_update = F.normalize(W1_update, dim=0)
+    #     b_update = b_update / (b_update.norm() + 1e-8)
+    #     W2_update = F.normalize(W2_update, dim=0)
 
-    if normalize_params:
-        W1 /= W1.norm() + 1e-8
-        b /= b.norm() + 1e-8
-        W2 /= W2.norm() + 1e-8
+    # if normalize_params:
+    #     W1 = W1 / (W1.norm() + 1e-8)
+    #     b = b / (b.norm() + 1e-8)
+    #     W2 = W2 / (W2.norm() + 1e-8)
 
     return (
         W1_update.flatten() @ W1.flatten()
@@ -45,7 +44,7 @@ def get_rescale_sym_constraint_deviation(
 
 
 def get_translation_sym_constraint_deviations(
-    W_update, b_update, normalize_updates=False
+    W_update, b_update
 ):
     """Applies to Softmax
     inner(W_gradient, all_ones) = inner(b_gradient, all_ones) = 0
@@ -63,9 +62,9 @@ def get_translation_sym_constraint_deviations(
         for preceding_layer_neuron_i in range(W_update.shape[1]):
             W_constraint_deviation += (W_update[:, preceding_layer_neuron_i] @ all_ones).item()
     """
-    if normalize_updates:
-        W_update = F.normalize(W_update, dim=0)
-        b_update /= b_update.norm() + 1e-8
+    # if normalize_updates:
+    #     W_update = F.normalize(W_update, dim=0)
+    #     b_update = b_update / (b_update.norm() + 1e-8)
 
     W_deviations = W_update.sum()
     b_deviations = b_update.sum()  # inner(b_update, all_ones)
@@ -74,7 +73,7 @@ def get_translation_sym_constraint_deviations(
 
 
 def get_scale_sym_constraint_deviation(
-    W, b, W_update, b_update, normalize_updates=False, normalize_params=False
+    W, b, W_update, b_update
 ):
     """Applies to Batch normalization
     inner(W_gradient, W) + inner(b_gradient, b) = 0
@@ -87,13 +86,13 @@ def get_scale_sym_constraint_deviation(
     any other parameter updates (from Adam, L2O optimizer, etc.) need to be
     negated (otherwise the deviations will have the opposite sign).
     """
-    if normalize_updates:
-        W_update = F.normalize(W_update, dim=0)
-        b_update /= b_update.norm() + 1e-8
+    # if normalize_updates:
+    #     W_update = F.normalize(W_update, dim=0)
+    #     b_update = b_update / (b_update.norm() + 1e-8)
 
-    if normalize_params:
-        W /= W.norm() + 1e-8
-        b /= b.norm() + 1e-8
+    # if normalize_params:
+    #     W = W / (W.norm() + 1e-8)
+    #     b = b / (b.norm() + 1e-8)
 
     W_deviations = W_update.flatten() @ W.flatten()
     b_deviations = b_update.flatten() @ b.flatten()
@@ -132,7 +131,9 @@ def get_baseline_opter_param_updates(optee, opter):
     opter_state_dict = opter.state_dict()
     if isinstance(opter, optim.Adam):
         for p_i, (n, p) in enumerate(optee.all_named_parameters()):
-            assert p.grad is not None, f"p.grad is None for {n}"
+            if p.grad is None:
+                print(f"p.grad is None for {n}, skipping")
+                continue
             assert p.shape == p.grad.shape
             assert p.shape == opter_state_dict["state"][p_i]["exp_avg"].shape
             assert p.shape == opter_state_dict["state"][p_i]["exp_avg_sq"].shape
@@ -168,13 +169,15 @@ def validate_inputs_for_collecting_deviations(opter_name, phase):
 
 
 def collect_rescale_sym_deviations(
-    config,
+    ckpt_iter_freq,
+    n_iters,
+    optee_cls,
     opter_cls,
+    optee_config=None,
     opter_config=None,
     phase="meta_testing",
     ckpt_path_prefix="",
-    normalize_updates=False,
-    normalize_params=False,
+    max_iters=None,
 ):
     """
     Collects get_rescale_sym_constraint_deviation() for all checkpoints saved during meta-testing.
@@ -189,10 +192,10 @@ def collect_rescale_sym_deviations(
     rescale_sym_grad_deviations = []
     rescale_sym_update_deviations = []
     for iter_i in range(
-        config[phase]["ckpt_iter_freq"],
-        config[phase]["n_iters"] + 1,
-        config[phase]["ckpt_iter_freq"],
+        ckpt_iter_freq, n_iters + 1, ckpt_iter_freq
     ):
+        if max_iters is not None and iter_i > max_iters:
+            break
         ckpt_path = f"{ckpt_path_prefix}{iter_i}.pt"
         if opter_name == "Optimizer":  # L2O
             # load checkpoint
@@ -204,18 +207,18 @@ def collect_rescale_sym_deviations(
                 loss_history,
             ) = load_l2o_opter_ckpt(
                 path=ckpt_path,
-                optee_cls=config[phase]["optee_cls"],
+                optee_cls=optee_cls,
                 opter_cls=opter_cls,
-                optee_config=config[phase]["optee_config"],
+                optee_config=optee_config,
                 opter_config=opter_config,
             )
         else:
             # load checkpoint
             optee, opter, optee_grads, loss_history = load_baseline_opter_ckpt(
                 path=ckpt_path,
-                optee_cls=config[phase]["optee_cls"],
+                optee_cls=optee_cls,
                 opter_cls=opter_cls,
-                optee_config=config[phase]["optee_config"],
+                optee_config=optee_config,
                 opter_config=opter_config,
             )
             # calculate optee updates
@@ -230,8 +233,6 @@ def collect_rescale_sym_deviations(
                 W1_update=optee_grads["layers.mat_0.weight"].cpu(),
                 b_update=optee_grads["layers.mat_0.bias"].cpu(),
                 W2_update=optee_grads["layers.final_mat.weight"].cpu(),
-                normalize_updates=normalize_updates,
-                normalize_params=normalize_params,
             ).item()
         )
         rescale_sym_update_deviations.append(
@@ -242,8 +243,6 @@ def collect_rescale_sym_deviations(
                 W1_update=-1 * optee_updates["layers.mat_0.weight"].cpu(),
                 b_update=-1 * optee_updates["layers.mat_0.bias"].cpu(),
                 W2_update=-1 * optee_updates["layers.final_mat.weight"].cpu(),
-                normalize_updates=normalize_updates,
-                normalize_params=normalize_params,
             ).item()
         )
 
@@ -253,12 +252,15 @@ def collect_rescale_sym_deviations(
 
 
 def collect_translation_sym_deviations(
-    config,
+    ckpt_iter_freq,
+    n_iters,
+    optee_cls,
     opter_cls,
+    optee_config=None,
     opter_config=None,
     phase="meta_testing",
     ckpt_path_prefix="",
-    normalize_updates=False,
+    max_iters=None,
 ):
     """
     Collects get_translation_sym_constraint_deviations() for all checkpoints saved during the given phase.
@@ -273,10 +275,10 @@ def collect_translation_sym_deviations(
     tranlation_sym_grad_deviations = []
     tranlation_sym_update_deviations = []
     for iter_i in range(
-        config[phase]["ckpt_iter_freq"],
-        config[phase]["n_iters"] + 1,
-        config[phase]["ckpt_iter_freq"],
+        ckpt_iter_freq, n_iters + 1, ckpt_iter_freq
     ):
+        if max_iters is not None and iter_i > max_iters:
+            break
         ckpt_path = f"{ckpt_path_prefix}{iter_i}.pt"
         if opter_name == "Optimizer":  # L2O
             # load checkpoint
@@ -288,18 +290,18 @@ def collect_translation_sym_deviations(
                 loss_history,
             ) = load_l2o_opter_ckpt(
                 path=ckpt_path,
-                optee_cls=config[phase]["optee_cls"],
+                optee_cls=optee_cls,
                 opter_cls=opter_cls,
-                optee_config=config[phase]["optee_config"],
+                optee_config=optee_config,
                 opter_config=opter_config,
             )
         else:
             # load checkpoint
             optee, opter, optee_grads, loss_history = load_baseline_opter_ckpt(
                 path=ckpt_path,
-                optee_cls=config[phase]["optee_cls"],
+                optee_cls=optee_cls,
                 opter_cls=opter_cls,
-                optee_config=config[phase]["optee_config"],
+                optee_config=optee_config,
                 opter_config=opter_config,
             )
             # calculate optee updates
@@ -309,14 +311,12 @@ def collect_translation_sym_deviations(
         sym_constraint_devs = get_translation_sym_constraint_deviations(
             W_update=optee_grads["layers.final_mat.weight"].cpu(),
             b_update=optee_grads["layers.final_mat.bias"].cpu(),
-            normalize_updates=normalize_updates,
         )
         tranlation_sym_grad_deviations.append([d.item() for d in sym_constraint_devs])
 
         sym_constraint_devs = get_translation_sym_constraint_deviations(
             W_update=-1 * optee_updates["layers.final_mat.weight"].cpu(),
             b_update=-1 * optee_updates["layers.final_mat.bias"].cpu(),
-            normalize_updates=normalize_updates,
         )
         tranlation_sym_update_deviations.append([d.item() for d in sym_constraint_devs])
 
@@ -326,13 +326,15 @@ def collect_translation_sym_deviations(
 
 
 def collect_scale_sym_deviations(
-    config,
+    ckpt_iter_freq,
+    n_iters,
+    optee_cls,
     opter_cls,
+    optee_config=None,
     opter_config=None,
     phase="meta_testing",
     ckpt_path_prefix="",
-    normalize_updates=False,
-    normalize_params=False,
+    max_iters=None,
 ):
     """
     Collects get_scale_sym_constraint_deviation() for all checkpoints saved during meta-testing.
@@ -347,10 +349,10 @@ def collect_scale_sym_deviations(
     scale_sym_grad_deviations = []
     scale_sym_update_deviations = []
     for iter_i in range(
-        config[phase]["ckpt_iter_freq"],
-        config[phase]["n_iters"] + 1,
-        config[phase]["ckpt_iter_freq"],
+        ckpt_iter_freq, n_iters + 1, ckpt_iter_freq
     ):
+        if max_iters is not None and iter_i > max_iters:
+            break
         ckpt_path = f"{ckpt_path_prefix}{iter_i}.pt"
         if opter_name == "Optimizer":  # L2O
             # load checkpoint
@@ -362,18 +364,18 @@ def collect_scale_sym_deviations(
                 loss_history,
             ) = load_l2o_opter_ckpt(
                 path=ckpt_path,
-                optee_cls=config[phase]["optee_cls"],
+                optee_cls=optee_cls,
                 opter_cls=opter_cls,
-                optee_config=config[phase]["optee_config"],
+                optee_config=optee_config,
                 opter_config=opter_config,
             )
         else:
             # load checkpoint
             optee, opter, optee_grads, loss_history = load_baseline_opter_ckpt(
                 path=ckpt_path,
-                optee_cls=config[phase]["optee_cls"],
+                optee_cls=optee_cls,
                 opter_cls=opter_cls,
-                optee_config=config[phase]["optee_config"],
+                optee_config=optee_config,
                 opter_config=opter_config,
             )
             # calculate optee updates
@@ -386,8 +388,6 @@ def collect_scale_sym_deviations(
                 b=optee.layers.mat_0.bias.cpu(),
                 W_update=optee_grads["layers.mat_0.weight"].cpu(),
                 b_update=optee_grads["layers.mat_0.bias"].cpu(),
-                normalize_updates=normalize_updates,
-                normalize_params=normalize_params,
             ).item()
         )
         scale_sym_update_deviations.append(
@@ -396,11 +396,43 @@ def collect_scale_sym_deviations(
                 b=optee.layers.mat_0.bias.cpu(),
                 W_update=-1 * optee_updates["layers.mat_0.weight"].cpu(),
                 b_update=-1 * optee_updates["layers.mat_0.bias"].cpu(),
-                normalize_updates=normalize_updates,
-                normalize_params=normalize_params,
             ).item()
         )
 
     scale_sym_grad_deviations = np.array(scale_sym_grad_deviations)
     scale_sym_update_deviations = np.array(scale_sym_update_deviations)
     return scale_sym_grad_deviations, scale_sym_update_deviations
+
+
+def collect_conservation_law_deviations(func, opter_cls, opter_config, optee_cls, optee_config,
+    ckpt_iter_freq, n_iters, ckpt_path_prefix, is_l2o=True, max_iters=None):
+    ### collect deviations
+    conservation_law_devs = []
+    params_t0 = None
+    for iter_i in range(
+        ckpt_iter_freq,
+        n_iters + 1,
+        ckpt_iter_freq,
+    ):
+        if max_iters is not None and iter_i > max_iters:
+            break
+        ### load checkpoint
+        ckpt_path = f"{ckpt_path_prefix}{iter_i}.pt"
+        ckpt = torch.load(ckpt_path)
+        optee = w(optee_cls(**optee_config if optee_config is not None else {}))
+        optee.load_state_dict(ckpt["optimizee"])
+
+        ### set params_t0
+        if iter_i == ckpt_iter_freq and params_t0 is None:
+            params_t0 = dict()
+            for n, p in optee.all_named_parameters():
+                params_t0[n] = p.clone().detach()
+        
+        ### calculate deviations
+        conservation_law_devs.append(
+            func(
+                optee=optee,
+                params_t0=params_t0
+            ).item()
+        )
+    return conservation_law_devs

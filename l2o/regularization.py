@@ -1,38 +1,33 @@
 import torch
 
-from l2o.analysis import (
-    get_rescale_sym_constraint_deviation,
-    get_scale_sym_constraint_deviation,
-    get_translation_sym_constraint_deviations,
-)
+from l2o.analysis import (get_rescale_sym_constraint_deviation,
+                          get_scale_sym_constraint_deviation,
+                          get_translation_sym_constraint_deviations)
 
 
 def regularize_updates_translation_constraints(
-    updates, optee, lr=1.0, normalize_updates=False, normalize_params=False
+    updates, optee, lr=1.0
 ):
     cons_deviations = get_translation_sym_constraint_deviations(
         W_update=-1 * lr * updates["layers.final_mat.weight"],
         b_update=-1 * lr * updates["layers.final_mat.bias"],
-        normalize_updates=normalize_updates,
     )
     return torch.abs(cons_deviations[0]) + torch.abs(cons_deviations[1])
 
 
 def regularize_updates_scale_constraints(
-    updates, optee, lr=1.0, normalize_updates=False, normalize_params=False
+    updates, optee, lr=1.0
 ):
     return get_scale_sym_constraint_deviation(
         W=optee.layers.mat_0.weight.detach(),
         b=optee.layers.mat_0.bias.detach(),
         W_update=-1 * lr * updates["layers.mat_0.weight"],
         b_update=-1 * lr * updates["layers.mat_0.bias"],
-        normalize_updates=normalize_updates,
-        normalize_params=normalize_params,
     )
 
 
 def regularize_updates_rescale_constraints(
-    updates, optee, lr=1.0, normalize_updates=False, normalize_params=False
+    updates, optee, lr=1.0
 ):
     return get_rescale_sym_constraint_deviation(
         W1=optee.layers.mat_0.weight.detach(),
@@ -41,8 +36,6 @@ def regularize_updates_rescale_constraints(
         W1_update=-1 * lr * updates["layers.mat_0.weight"],
         b_update=-1 * lr * updates["layers.mat_0.bias"],
         W2_update=-1 * lr * updates["layers.final_mat.weight"],
-        normalize_updates=normalize_updates,
-        normalize_params=normalize_params,
     )
 
 
@@ -53,16 +46,12 @@ def regularize_updates_constraints(
     rescale_mul=1 / 3,
     scale_mul=1 / 3,
     translation_mul=1 / 3,
-    normalize_updates=False,
-    normalize_params=False,
 ):
     """Combines all regularization functions."""
     kwargs = {
         "updates": updates,
         "optee": optee,
         "lr": lr,
-        "normalize_updates": normalize_updates,
-        "normalize_params": normalize_params,
     }
     return (
         regularize_updates_rescale_constraints(**kwargs) * rescale_mul
@@ -89,15 +78,20 @@ def regularize_translation_conservation_law_breaking(optee, params_t0):
         print(
             "[WARNING] Regularizing translation law breaking with initial parameters having .requires_grad = True"
         )
-    weight_dev = torch.abs(
-        torch.sum(params_t0["layers.final_mat.weight"])
-        - torch.sum(optee.layers.final_mat.weight)
-    )
-    bias_dev = torch.abs(
-        torch.sum(params_t0["layers.final_mat.bias"])
-        - torch.sum(optee.layers.final_mat.bias)
-    )
-    return weight_dev + bias_dev
+
+    theta_X_t0 = torch.cat((
+        params_t0["layers.final_mat.weight"],
+        params_t0["layers.final_mat.bias"].unsqueeze(1),
+    ), dim=1)  # (n_neurons_l+1, n_neurons_l + 1)
+    theta_X_sum_t0 = theta_X_t0.sum(dim=0)  # (n_neurons_l + 1,)
+
+    theta_X_now = torch.cat((
+        optee.layers.final_mat.weight,
+        optee.layers.final_mat.bias.unsqueeze(1),
+    ), dim=1)  # (n_neurons_l+1, n_neurons_l + 1)
+    theta_X_sum_now = theta_X_now.sum(dim=0)  # (n_neurons_l + 1,)
+
+    return torch.abs(theta_X_sum_t0 - theta_X_sum_now).sum()
 
 
 def regularize_rescale_conservation_law_breaking(optee, params_t0):
@@ -106,17 +100,23 @@ def regularize_rescale_conservation_law_breaking(optee, params_t0):
         norm(params_t.subset_A)^2 - norm(params_t.subset_B)^2 = norm(params_t0.subset_A)^2 - norm(params_t0.subset_B)^2
     This function regularizes the deviation from keeping this equality.
     """
-    t0_diff = (
-        torch.norm(params_t0["layers.mat_0.weight"]) ** 2
-        + torch.norm(params_t0["layers.mat_0.bias"]) ** 2
-        - torch.norm(params_t0["layers.final_mat.weight"]) ** 2
-    )
-    t_diff = (
-        torch.norm(optee.layers.mat_0.weight) ** 2
-        + torch.norm(optee.layers.mat_0.bias) ** 2
-        - torch.norm(optee.layers.final_mat.weight) ** 2
-    )
-    return torch.abs(t0_diff - t_diff)
+    ### time t0 - TODO: precompute
+    # squared euclidean norm of each neuron's incoming weights
+    theta_X1_t0 = (params_t0["layers.mat_0.weight"] ** 2).sum(dim=1)  # (n_neurons,)
+    theta_X1_t0 += params_t0["layers.mat_0.bias"] ** 2
+    # squared euclidean norm of each neuron's outgoing weights
+    theta_X2_t0 = (params_t0["layers.final_mat.weight"] ** 2).sum(dim=0)  # (n_neurons,)
+    t0 = theta_X1_t0 - theta_X2_t0
+
+    ### time t
+    # squared euclidean norm of each neuron's incoming weights
+    theta_X1_now = (optee.layers.mat_0.weight ** 2).sum(dim=1)  # (n_neurons,)
+    theta_X1_now += optee.layers.mat_0.bias ** 2
+    # squared euclidean norm of each neuron's outgoing weights
+    theta_X2_now = (optee.layers.final_mat.weight ** 2).sum(dim=0)  # (n_neurons,)
+    now = theta_X1_now - theta_X2_now
+
+    return torch.abs(now - t0).sum()
 
 
 def regularize_scale_conservation_law_breaking(optee, params_t0):
@@ -125,6 +125,7 @@ def regularize_scale_conservation_law_breaking(optee, params_t0):
         norm(params_t)^2 = norm(params_t0)^2
     This function regularizes the deviation from keeping this equality.
     """
+    raise NotImplementedError
     return torch.abs(
         torch.norm(params_t0["layers.mat_0.weight"]) ** 2
         + torch.norm(params_t0["layers.mat_0.bias"]) ** 2

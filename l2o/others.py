@@ -11,11 +11,6 @@ def load_ckpt(dir_path):
     ### load pretrained L2O optimizer model and config
     ckpt = torch.load(os.path.join(dir_path, "l2o_optimizer.pt"))
     config = ckpt["config"]
-    if "opter_config" not in config:  # TODO: fix this (it's here due to older ckpts)
-        config["opter_config"] = {
-            "preproc": config["meta_training"]["preproc"],
-        }
-        del config["meta_training"]["preproc"]
 
     opter = w(
         config["opter_cls"](
@@ -58,6 +53,10 @@ def load_baseline_opter_ckpt(
     for k, v in optee.named_parameters():
         v.grad = optee_grads[k]
 
+    if "lr" in opter_config and type(opter_config["lr"]) not in (int, float):
+        opter_config = opter_config.copy()
+        opter_config["lr"] = ckpt["optimizer"]["param_groups"][0]["lr"]
+
     opter = opter_cls(
         optee.parameters(), **opter_config if opter_config is not None else {}
     )
@@ -66,6 +65,67 @@ def load_baseline_opter_ckpt(
     metrics = ckpt["metrics"]
 
     return optee, opter, optee_grads, metrics
+
+
+# def load_ckpt(
+#     path, optee_cls, opter_cls, optee_config=None, opter_config=None, is_l2o=True
+# ):
+#     ckpt = torch.load(path)
+
+#     optee = w(optee_cls(**optee_config if optee_config is not None else {}))
+#     optee.load_state_dict(ckpt["optimizee"])
+#     optee_grads = ckpt["optimizee_grads"]
+#     for k, v in optee.named_parameters():
+#         v.grad = optee_grads[k]
+    
+#     if is_l2o:
+#         opter = opter_cls(**opter_config if opter_config is not None else {})
+#         opter.load_state_dict(ckpt["optimizer"])
+#         optee_updates = ckpt["optimizee_updates"]  # predicted by l2o optimizer
+#     else:
+#         opter = opter_cls(
+#             optee.parameters(), **opter_config if opter_config is not None else {}
+#         )
+#         opter.load_state_dict(ckpt["optimizer"])
+#         optee_updates = None
+
+#     metrics = ckpt["metrics"]
+
+#     return optee, opter, optee_grads, optee_updates, metrics
+
+
+def dict_to_str(d):
+    # inner_str = "_".join([f"{k}={v}" for k, v in d.items()])
+    inner_str = ""
+    for k, v in d.items():
+        if callable(v):
+            inner_str += f"{k}={v.__name__}_"
+        else:
+            inner_str += f"{k}={v}_"
+    inner_str = inner_str[:-1]
+    return "{" + inner_str + "}"
+
+
+def get_baseline_ckpt_dir(
+    opter_cls,
+    opter_config,
+    optee_cls,
+    optee_config,
+    data_cls,
+    data_config,
+):
+    ckpt_dir = opter_cls.__name__
+    ckpt_dir += "_"
+    ckpt_dir += dict_to_str(opter_config)
+    ckpt_dir += "_"
+    ckpt_dir += optee_cls.__name__
+    ckpt_dir += "_"
+    ckpt_dir += dict_to_str(optee_config)
+    ckpt_dir += "_"
+    ckpt_dir += data_cls.__name__
+    ckpt_dir += "_"
+    ckpt_dir += dict_to_str(data_config)
+    return ckpt_dir
 
 
 def w(v):
