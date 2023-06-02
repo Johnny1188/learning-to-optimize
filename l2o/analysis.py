@@ -118,9 +118,7 @@ def get_adam_param_update(
 
     # update (new_param = old_param + param_update)
     param_update = (
-        -lr
-        * bias_corrected_first_moment
-        / (torch.sqrt(bias_corrected_second_moment) + eps)
+        -lr * bias_corrected_first_moment / (torch.sqrt(bias_corrected_second_moment) + eps)
     )
 
     return param_update
@@ -129,10 +127,18 @@ def get_adam_param_update(
 def get_baseline_opter_param_updates(optee, opter):
     optee_updates = {}
     opter_state_dict = opter.state_dict()
+    if opter_state_dict["state"] is None or len(opter_state_dict["state"]) == 0: # first step
+        print(f"[WARNING] opter_state_dict['state'] is None, initializing")
+        opter_state_dict["state"] = [{
+            "exp_avg": torch.zeros_like(p),
+            "exp_avg_sq": torch.zeros_like(p),
+            "step": 0,
+        } for _, p in optee.all_named_parameters()]
+
     if isinstance(opter, optim.Adam):
         for p_i, (n, p) in enumerate(optee.all_named_parameters()):
             if p.grad is None:
-                print(f"p.grad is None for {n}, skipping")
+                print(f"[WARNING] p.grad is None for {n}, skipping")
                 continue
             assert p.shape == p.grad.shape
             assert p.shape == opter_state_dict["state"][p_i]["exp_avg"].shape
