@@ -124,11 +124,12 @@ def get_adam_param_update(
     return param_update
 
 
-def get_baseline_opter_param_updates(optee, opter):
+def get_baseline_opter_param_updates(optee, opter, verbose=True):
     optee_updates = {}
     opter_state_dict = opter.state_dict()
     if opter_state_dict["state"] is None or len(opter_state_dict["state"]) == 0: # first step
-        print(f"[WARNING] opter_state_dict['state'] is None, initializing")
+        if verbose:
+            print(f"[WARNING] opter_state_dict['state'] is None, initializing")
         opter_state_dict["state"] = [{
             "exp_avg": torch.zeros_like(p),
             "exp_avg_sq": torch.zeros_like(p),
@@ -138,7 +139,8 @@ def get_baseline_opter_param_updates(optee, opter):
     if isinstance(opter, optim.Adam):
         for p_i, (n, p) in enumerate(optee.all_named_parameters()):
             if p.grad is None:
-                print(f"[WARNING] p.grad is None for {n}, skipping")
+                if verbose:
+                    print(f"[WARNING] p.grad is None for {n}, skipping")
                 continue
             assert p.shape == p.grad.shape
             assert p.shape == opter_state_dict["state"][p_i]["exp_avg"].shape
@@ -442,3 +444,15 @@ def collect_conservation_law_deviations(func, opter_cls, opter_config, optee_cls
             ).item()
         )
     return conservation_law_devs
+
+
+def calc_sai(vec_t0, vec_t1, time_delta=1, normalize=True):
+    """ Calculate Stiffness-Aware Index (SAI) from the state transition. """
+    state_change = vec_t1 - vec_t0
+    state_change = torch.norm(state_change / time_delta, p=2)
+
+    if normalize:
+        norm_factor = 1 / (torch.norm(vec_t0, p=2) + 1e-8)
+        state_change = state_change * norm_factor
+
+    return state_change
