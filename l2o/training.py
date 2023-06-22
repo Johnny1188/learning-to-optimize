@@ -241,6 +241,7 @@ def fit_optimizer(
     optee_updates_lr=1.0,
     eval_iter_freq=10,
     ckpt_iter_freq=None,
+    ckpt_epoch_freq=None,
     ckpt_prefix="",
     ckpt_dir="",
     load_ckpt=None,
@@ -279,6 +280,9 @@ def fit_optimizer(
 
         ### meta-train
         for run_i in range(n_optim_runs_per_epoch):
+            curr_ckpt_iter_freq = None
+            if epoch_i % ckpt_epoch_freq == 0 and run_i == n_optim_runs_per_epoch - 1:
+                curr_ckpt_iter_freq = ckpt_iter_freq
             optim_run_metrics = do_fit(
                 opter=opter,
                 opter_optim=meta_opt,
@@ -295,7 +299,7 @@ def fit_optimizer(
                 opter_updates_reg_func_config=opter_updates_reg_func_config,
                 reg_mul=reg_mul,
                 eval_iter_freq=eval_iter_freq,
-                ckpt_iter_freq=ckpt_iter_freq if run_i == n_optim_runs_per_epoch - 1 else None,
+                ckpt_iter_freq=curr_ckpt_iter_freq,
                 ckpt_prefix=f"{ckpt_prefix}{epoch_i}e_",
                 ckpt_dir=ckpt_dir,
             )
@@ -379,14 +383,15 @@ def fit_optimizer(
                 best_opter = copy.deepcopy(opter.state_dict())
 
         ### save ckpt
-        ckpt = {
-            "best_opter": best_opter if best_opter else None,
-            "best_loss": best_loss,
-            "opter": opter.state_dict(),
-            "meta_opter": meta_opt.state_dict(),
-            "metrics": all_metrics,
-        }
-        torch.save(ckpt, os.path.join(ckpt_dir, f"{epoch_i}.pt"))
+        if epoch_i % ckpt_epoch_freq == 0:
+            ckpt = {
+                "best_opter": best_opter if best_opter else None,
+                "best_loss": best_loss,
+                "opter": opter.state_dict(),
+                "meta_opter": meta_opt.state_dict(),
+                "metrics": all_metrics,
+            }
+            torch.save(ckpt, os.path.join(ckpt_dir, f"{epoch_i}.pt"))
 
         end_time = time.time()
         if verbose > 0:
