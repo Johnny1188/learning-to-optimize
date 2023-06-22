@@ -1,0 +1,13 @@
+name: l2o
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10.4
+  - pip
+  - matplotlib
+  - seaborn
+  - pip:
+      - torch
+      - torchvision
