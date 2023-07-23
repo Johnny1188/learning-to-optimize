@@ -490,6 +490,81 @@ class MNISTMixtureOfActivations(MetaModule):
         return l
 
 
+class MNISTMixtureOfActivationsFeatureDim(MetaModule):
+    def __init__(
+        self,
+        layer_size=20,
+        n_layers=1,
+        activations=("sigmoid", "tanh", "relu"),
+        **kwargs,
+    ):
+        super().__init__()
+
+        inp_size = 28 * 28
+        self.layers = {}
+        for i in range(n_layers):
+            self.layers[f"mat_{i}"] = MetaLinear(inp_size, layer_size)
+            inp_size = layer_size
+
+        self.layers["final_mat"] = MetaLinear(inp_size, 10)
+        self.layers = nn.ModuleDict(self.layers)
+
+        self.activations = activations
+        self.loss = nn.NLLLoss()
+
+    def all_named_parameters(self):
+        return [(k, v) for k, v in self.named_parameters()]
+
+    def forward(self, data=None, inp=None, out=None, return_acc=False):
+        assert (data is None) != (
+            inp is None and out is None
+        ), "Must provide either data or inp and out"
+
+        if data is not None:
+            inp, out = data.sample()
+            inp = w(Variable(inp.view(inp.size()[0], 28 * 28)))
+            out = w(Variable(out))
+
+        cur_layer = 0
+        while f"mat_{cur_layer}" in self.layers:
+            inp = self.layers[f"mat_{cur_layer}"](inp)
+
+            ### pad the feature dim to be divisible by len(self.activations)
+            to_pad = len(self.activations) - (inp.size(1) % len(self.activations))
+            inp = F.pad(
+                inp,
+                (0, to_pad),
+                mode="constant",
+                value=0,
+            )
+
+            ### split along the feature dim into len(self.activations) chunks and apply the activations
+            inp = [
+                getattr(F, self.activations[i % len(self.activations)])(
+                    inp[:, i :: len(self.activations)]
+                ).unsqueeze(1)
+                for i in range(len(self.activations))
+            ] # (B, 1, D/len(self.activations))
+
+            ### rearrage back such that the local spatial information is preserved (interleave the chunks)
+            inp = torch.cat(inp, dim=1) # (B, len(self.activations), D/len(self.activations))
+            inp = inp.transpose(2, 1).contiguous().view(inp.size(0), -1) # (B, D)
+
+            ### remove the padding
+            inp = inp[:, :-to_pad]
+
+            cur_layer += 1
+
+        inp = F.log_softmax(self.layers["final_mat"](inp), dim=1)
+        l = self.loss(inp, out)
+
+        if return_acc:
+            acc = (inp.argmax(dim=1) == out).float().mean()
+            return l, acc
+
+        return l
+
+
 ### CIFAR-10 --------------------------------------------------------------------------------------------
 class CIFAR10Sigmoid(MetaModule):
     def __init__(self, layer_size=40, n_layers=2, inp_size=32 * 32 * 3, **kwargs):
