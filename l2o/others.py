@@ -9,7 +9,7 @@ USE_CUDA = torch.cuda.is_available()
 
 def load_ckpt(dir_path):
     ### load pretrained L2O optimizer model and config
-    ckpt = torch.load(os.path.join(dir_path, "l2o_optimizer.pt"))
+    ckpt = torch.load(os.path.join(dir_path, "l2o_optimizer.pt"), map_location="cuda:0" if USE_CUDA else "cpu")
     config = ckpt["config"]
 
     opter = w(
