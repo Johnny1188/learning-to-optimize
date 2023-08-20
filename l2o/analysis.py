@@ -5,6 +5,8 @@ from torch import optim
 
 from l2o.others import (load_baseline_opter_ckpt, load_ckpt,
                         load_l2o_opter_ckpt, w)
+from l2o.lion_optimizer import Lion
+from l2o.lion_optimizer import update_fn as lion_update_fn
 
 
 def get_rescale_sym_constraint_deviation(
@@ -158,6 +160,28 @@ def get_baseline_opter_param_updates(optee, opter, verbose=True):
         for n, p in optee.all_named_parameters():
             if p.grad is not None:
                 optee_updates[n] = -opter_state_dict["param_groups"][0]["lr"] * p.grad
+    elif isinstance(opter, Lion):
+        for p_i, (n, p) in enumerate(optee.all_named_parameters()):
+            if p.grad is None:
+                if verbose:
+                    print(f"[WARNING] p.grad is None for {n}, skipping")
+                continue
+            assert p.shape == p.grad.shape
+            assert p.shape == opter_state_dict["state"][p_i]["exp_avg"].shape
+
+            optee_updates[n] = p.detach().clone()
+
+            ### inplace update
+            lion_update_fn(
+                p=optee_updates[n],
+                grad=p.grad,
+                exp_avg=opter_state_dict["state"][p_i]["exp_avg"].detach().clone(),
+                lr=opter_state_dict["param_groups"][0]["lr"],
+                wd=opter_state_dict["param_groups"][0]["weight_decay"],
+                beta1=opter_state_dict["param_groups"][0]["betas"][0],
+                beta2=opter_state_dict["param_groups"][0]["betas"][1],
+            )
+            assert not torch.allclose(optee_updates[n], p)
     else:
         raise NotImplementedError(f"Optimizer {type(opter)} not implemented")
     return optee_updates
@@ -168,6 +192,7 @@ def validate_inputs_for_collecting_deviations(opter_name, phase):
         "Optimizer",
         "SGD",
         "Adam",
+        "Lion",
     ], f"opter_cls {opter_name} not supported"
     assert phase in ["meta_training", "meta_testing"], f"phase {phase} not supported"
     assert (
@@ -199,9 +224,9 @@ def collect_rescale_sym_deviations(
     ### collect deviations
     rescale_sym_grad_deviations = []
     rescale_sym_update_deviations = []
-    for iter_i in range(
+    for iter_i in [1, *range(
         ckpt_iter_freq, n_iters + 1, ckpt_iter_freq
-    ):
+    )]:
         if max_iters is not None and iter_i > max_iters:
             break
         ckpt_path = f"{ckpt_path_prefix}{iter_i}.pt"
@@ -282,9 +307,9 @@ def collect_translation_sym_deviations(
     ### collect deviations
     tranlation_sym_grad_deviations = []
     tranlation_sym_update_deviations = []
-    for iter_i in range(
+    for iter_i in [1, *range(
         ckpt_iter_freq, n_iters + 1, ckpt_iter_freq
-    ):
+    )]:
         if max_iters is not None and iter_i > max_iters:
             break
         ckpt_path = f"{ckpt_path_prefix}{iter_i}.pt"
@@ -356,9 +381,9 @@ def collect_scale_sym_deviations(
     ### collect deviations
     scale_sym_grad_deviations = []
     scale_sym_update_deviations = []
-    for iter_i in range(
+    for iter_i in [1, *range(
         ckpt_iter_freq, n_iters + 1, ckpt_iter_freq
-    ):
+    )]:
         if max_iters is not None and iter_i > max_iters:
             break
         ckpt_path = f"{ckpt_path_prefix}{iter_i}.pt"
