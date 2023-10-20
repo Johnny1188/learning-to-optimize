@@ -7,7 +7,6 @@ from l2o.meta_module import *
 from l2o.others import w
 
 
-### TODO: make a single network class that can be used for all optee nets
 class MLPOptee(MetaModule):
     def __init__(
         self,

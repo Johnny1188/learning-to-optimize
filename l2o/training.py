@@ -97,8 +97,8 @@ def do_fit(
                 result_params[name] = p
                 continue
 
-            # We do this so the gradients are disconnected from the graph but we still get
-            # gradients from the rest
+            ### We do this so the gradients are disconnected from the graph but we still get
+            ### gradients from the rest
             cur_sz = int(np.prod(p.size()))
             gradients = detach_var(p.grad.view(cur_sz, 1))
             updates, new_hidden, new_cell = opter(
@@ -128,32 +128,20 @@ def do_fit(
 
         ### add regularization loss for opter
         if train_opter and opter_updates_reg_func is not None:
-            if "conservation_law_breaking" in opter_updates_reg_func.__name__:  # TODO: quick hack
-                reg_loss = torch.abs(
-                    reg_mul
-                    * opter_updates_reg_func(
-                        optee=optee,
-                        params_t0=optee_init_params,
-                        **opter_updates_reg_func_config
-                        if opter_updates_reg_func_config is not None
-                        else {},
-                    )
+            reg_loss = torch.abs(
+                reg_mul
+                * opter_updates_reg_func(
+                    updates=updates_for_reg,
+                    optee=optee,
+                    lr=optee_updates_lr,
+                    **opter_updates_reg_func_config
+                    if opter_updates_reg_func_config is not None
+                    else {},
                 )
-            else:
-                reg_loss = torch.abs(
-                    reg_mul
-                    * opter_updates_reg_func(
-                        updates=updates_for_reg,
-                        optee=optee,
-                        lr=optee_updates_lr,
-                        **opter_updates_reg_func_config
-                        if opter_updates_reg_func_config is not None
-                        else {},
-                    )
-                )
+            )
             reg_losses = reg_loss if reg_losses is None else reg_losses + reg_loss
             updates_for_reg = dict()
-            # add to metrics
+            ### add to metrics
             if "train_reg_loss" not in metrics:
                 metrics["train_reg_loss"] = []
             metrics["train_reg_loss"].append(reg_loss.item())

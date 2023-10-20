@@ -1,4 +1,5 @@
 import itertools
+import os
 import operator
 from collections import OrderedDict
 from itertools import islice
@@ -10,9 +11,11 @@ import torch.nn.functional as F
 import torchvision
 from torch.autograd import Variable
 
+DEVICE = os.getenv("DEVICE", "cpu")
+
 
 def to_var(x, requires_grad=True):
-    if torch.cuda.is_available():
+    if DEVICE != "cpu":
         x = x.cuda()
     return Variable(x, requires_grad=requires_grad)
 

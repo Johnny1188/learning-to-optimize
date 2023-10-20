@@ -4,12 +4,12 @@ import os
 import torch
 from torch.autograd import Variable
 
-USE_CUDA = torch.cuda.is_available()
+DEVICE = os.getenv("DEVICE", "cpu")
 
 
 def load_ckpt(dir_path):
     ### load pretrained L2O optimizer model and config
-    ckpt = torch.load(os.path.join(dir_path, "l2o_optimizer.pt"), map_location="cuda:0" if USE_CUDA else "cpu")
+    ckpt = torch.load(os.path.join(dir_path, "l2o_optimizer.pt"), map_location=DEVICE)
     config = ckpt["config"]
 
     opter = w(
@@ -25,7 +25,7 @@ def load_ckpt(dir_path):
 def load_l2o_opter_ckpt(
     path, optee_cls, opter_cls, optee_config=None, opter_config=None
 ):
-    ckpt = torch.load(path)
+    ckpt = torch.load(path, map_location=DEVICE)
 
     optee = w(optee_cls(**optee_config if optee_config is not None else {}))
     optee.load_state_dict(ckpt["optimizee"])
@@ -45,7 +45,7 @@ def load_l2o_opter_ckpt(
 def load_baseline_opter_ckpt(
     path, optee_cls, opter_cls, optee_config=None, opter_config=None
 ):
-    ckpt = torch.load(path)
+    ckpt = torch.load(path, map_location=DEVICE)
 
     optee = w(optee_cls(**optee_config if optee_config is not None else {}))
     optee.load_state_dict(ckpt["optimizee"])
@@ -67,35 +67,7 @@ def load_baseline_opter_ckpt(
     return optee, opter, optee_grads, metrics
 
 
-# def load_ckpt(
-#     path, optee_cls, opter_cls, optee_config=None, opter_config=None, is_l2o=True
-# ):
-#     ckpt = torch.load(path)
-
-#     optee = w(optee_cls(**optee_config if optee_config is not None else {}))
-#     optee.load_state_dict(ckpt["optimizee"])
-#     optee_grads = ckpt["optimizee_grads"]
-#     for k, v in optee.named_parameters():
-#         v.grad = optee_grads[k]
-    
-#     if is_l2o:
-#         opter = opter_cls(**opter_config if opter_config is not None else {})
-#         opter.load_state_dict(ckpt["optimizer"])
-#         optee_updates = ckpt["optimizee_updates"]  # predicted by l2o optimizer
-#     else:
-#         opter = opter_cls(
-#             optee.parameters(), **opter_config if opter_config is not None else {}
-#         )
-#         opter.load_state_dict(ckpt["optimizer"])
-#         optee_updates = None
-
-#     metrics = ckpt["metrics"]
-
-#     return optee, opter, optee_grads, optee_updates, metrics
-
-
 def dict_to_str(d):
-    # inner_str = "_".join([f"{k}={v}" for k, v in d.items()])
     inner_str = ""
     for k, v in d.items():
         if callable(v):
@@ -129,7 +101,7 @@ def get_baseline_ckpt_dir(
 
 
 def w(v):
-    if USE_CUDA:
+    if DEVICE != "cpu":
         return v.cuda()
     return v
 

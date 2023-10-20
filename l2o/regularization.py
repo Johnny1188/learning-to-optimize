@@ -65,12 +65,18 @@ def regularize_update_norms(updates, optee, lr=1.0):
     return sum([torch.norm(lr * u) for u in updates.values()])
 
 
+
+"""
+--------
+OBSOLETE
+--------
+
 def regularize_translation_conservation_law_breaking(optee, params_t0):
-    """
+    \"""
     The following should hold when trained under the gradient flow:
         inner(params_t, ind_vector) = inner(params_t0, ind_vector)
     This function regularizes the deviation from keeping this equality.
-    """
+    \"""
     if (
         params_t0["layers.final_mat.weight"].requires_grad
         or params_t0["layers.final_mat.bias"].requires_grad
@@ -95,11 +101,11 @@ def regularize_translation_conservation_law_breaking(optee, params_t0):
 
 
 def regularize_rescale_conservation_law_breaking(optee, params_t0):
-    """
+    \"""
     The following should hold when trained under the gradient flow:
         norm(params_t.subset_A)^2 - norm(params_t.subset_B)^2 = norm(params_t0.subset_A)^2 - norm(params_t0.subset_B)^2
     This function regularizes the deviation from keeping this equality.
-    """
+    \"""
     ### time t0 - TODO: precompute
     # squared euclidean norm of each neuron's incoming weights
     theta_X1_t0 = (params_t0["layers.mat_0.weight"] ** 2).sum(dim=1)  # (n_neurons,)
@@ -120,11 +126,11 @@ def regularize_rescale_conservation_law_breaking(optee, params_t0):
 
 
 def regularize_scale_conservation_law_breaking(optee, params_t0):
-    """
+    \"""
     The following should hold when trained under the gradient flow:
         norm(params_t)^2 = norm(params_t0)^2
     This function regularizes the deviation from keeping this equality.
-    """
+    \"""
     raise NotImplementedError
     return torch.abs(
         torch.norm(params_t0["layers.mat_0.weight"]) ** 2
@@ -137,10 +143,12 @@ def regularize_scale_conservation_law_breaking(optee, params_t0):
 def regularize_conservation_law_breaking(
     optee, params_t0, rescale_mul=1 / 3, scale_mul=1 / 3, translation_mul=1 / 3
 ):
-    """Combines all conservation law breaking regularization functions."""
+    \"""Combines all conservation law breaking regularization functions.\"""
     return (
         regularize_rescale_conservation_law_breaking(optee, params_t0) * rescale_mul
         + regularize_scale_conservation_law_breaking(optee, params_t0) * scale_mul
         + regularize_translation_conservation_law_breaking(optee, params_t0)
         * translation_mul
     )
+
+"""
