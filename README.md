@@ -1,24 +1,39 @@
-# Learning to optimize
+# Learning to Optimize
 
-[Intro](#intro) - [Usage](#usage) - [Results](#results) - [Acknowledgements](#acknowledgements)
+[Intro](#intro) - [Results](#results) - [Acknowledgements](#acknowledgements)
 
 ---
 
 ## Intro
-Combining Learning-to-Optimize (L2O) with insights about symmetries in network architectures and Deep Learning training dynamics.
-- Related to:
-  - [Learning to Optimize: A Primer and A Benchmark](https://arxiv.org/abs/2103.12828)
-  - [Learning to learn by gradient descent by gradient descent](https://arxiv.org/abs/1606.04474)
-  - [Neural Mechanics: Symmetry and Broken Conservation Laws in Deep Learning Dynamics](https://arxiv.org/abs/2012.04728)
+This code is for our **study of the optimization trajectories of learned vs. traditional optimizers** from the perspective of network architecture symmetries and proposed parameter update distributions. Full paper: [Investigation into the Training Dynamics of Learned Optimizers, Jan Sobotka, Petr Šimánek, Daniel Vašata, 2023](https://johnny1188.github.io/files/2023-10-28-learning-to-optimize.pdf).
 
 
-## Usage
+## Results
+- Similarly to Lion, **learned optimizers break the geometric constraints on gradients** that stem from architectural symmetries and that deviations from these constraints are significantly larger than those observed with previous optimizers like Adam or SGD (Figure 4). In the case of learned optimizers, we observe that a large deviation from these geometric constraints almost always accompanies the initial rapid decrease in loss during optimization. More importantly, **regularizing against this symmetry breaking during meta-training severely damages performance**, hinting at the importance of this freedom in L2O parameter updates.
+- In another experiment, we also see that the increasing symmetry breaking of the *Lion-SGD* optimizer (interpolation between Lion and SGD parameter updates) correlates with an increase in performance. This indicates that **breaking the strict geometric constraints might be beneficial not only for L2O but also for more traditional, manually designed optimization
+algorithms**.
+<p style="display: flex; gap: 10px; justify-content: center;">
+    <img src="./results/gh/sym_breaking.png" style="height: 100%; max-width: 32%" alt="Symmetry breaking" />
+    <img src="./results/gh/sym_regularization.png" style="height: 100%; max-width: 32%"  alt="Regularization against the symmetry breaking" />
+    <img src="./results/gh/lion_sgd.png" style="height: 100%; max-width: 32%"  alt="Lion-SGD interpolation optimizer" />
+</p>
+
+- Additionally, on the Figure 9 below, one can notice that the **L2O starts with the largest updates** and then slowly approaches the update distribution of Adam.
+- Furthermore, by studying the noise and covariance in the L2O parameter updates, we demonstrate that, on the one hand, **L2O updates exhibit less heavy-tailed stochastic noise** (Figure 8, left; higher alpha - less heavy-tailed), and, on the other hand, **the variation in updates across different samples is larger**. This less heavy-tailed distribution of L2O updates despite the gradients exhibiting very heavy-tailed behavior, together with the high variation of updates across different samples, points to one interesting observation: **L2O appears to act as a stabilizing force in the optimization process**. While the inherent stochasticity and heavy-tailed nature of gradients might lead to erratic updates and
+slow convergence, the noise clipping of L2O seems to mitigate these issues.
+<p style="display: flex; gap: 10px; justify-content: center;">
+    <img src="./results/gh/histograms.png" style="height: 100%; max-width: 48%"  alt="Histograms of the absolute values of parameter updates" />
+    <img src="./results/gh/heavy_tailedness_and_covariance.png" style="height: 100%; max-width: 48%" alt="Heavy-tailedness and update covariance" />
+</p>
+
+
+<!-- ## Usage
 To install the package in an editable mode and forego any import errors, run:
 ```bash
 pip install -e .
 ```
 
-One can run the meta-training -> meta-testing pipeline from the Jupyter Notebook `scripts/main.ipynb` and then analyze the results in `scripts/analyze.ipynb`. L2O Optimizer is implemented in `l2o/optimizer.py`, helper meta-modules are in `l2o/meta_modules.py`, and optimizee models are in `l2o/optimizee.py`. Both meta-training and meta-testing scripts are in `l2o/training.py` (meta-testing <=> pretrained L2O optimizer *trains/optimizes* the optimizee).ipynb`. Additionally, `l2o/data.py` contains the utils for data on which optimizee is trained (MNIST).
+One can run both the meta-training and meta-testing in the Jupyter Notebook `scripts/main.ipynb` and then analyze the optimization runs in `scripts/analyze.ipynb`. The L2O Optimizer is implemented in `l2o/optimizer.py`, helper meta-modules are in `l2o/meta_modules.py`, and optimizee models are in `l2o/optimizee.py`. Additionally, `l2o/data.py` contains the utils for data on which optimizees are trained (MNIST).
 
 
 ## Results
@@ -157,7 +172,7 @@ Below is shown the influence of regularizing the L2O optimizer during meta-train
         <td>
             <img src="./results/imgs/regularization/MNISTReluBatchNorm_meta_training/losses_comparison_MNISTNetBig_{}.png" width="100%" alt="MNISTReluBatchNorm to MNISTNetBig" />
         </td>
-</table>
+</table> -->
 
 
 ## Acknowledgements
