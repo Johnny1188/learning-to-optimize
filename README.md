@@ -21,11 +21,14 @@ algorithms**.
 - Additionally, on the Figure 9 below, one can notice that the **L2O starts with the largest updates** and then slowly approaches the update distribution of Adam.
 - Furthermore, by studying the noise and covariance in the L2O parameter updates, we demonstrate that, on the one hand, **L2O updates exhibit less heavy-tailed stochastic noise** (Figure 8, left; higher alpha - less heavy-tailed), and, on the other hand, **the variation in updates across different samples is larger**. This less heavy-tailed distribution of L2O updates despite the gradients exhibiting very heavy-tailed behavior, together with the high variation of updates across different samples, points to one interesting observation: **L2O appears to act as a stabilizing force in the optimization process**. While the inherent stochasticity and heavy-tailed nature of gradients might lead to erratic updates and
 slow convergence, the noise clipping of L2O seems to mitigate these issues.
-<p align="center">
+<!-- <p align="center">
     <img src="./results/gh/histograms.png" width="48%"  alt="Histograms of the absolute values of parameter updates" />
     <img src="./results/gh/heavy_tailedness_and_covariance.png" width="48%" alt="Heavy-tailedness and update covariance" />
-</p>
+</p> -->
 
+Figure 9: Histograms of the absolute values of parameter updates.             |  Figure 8: Heavy-tailedness and update covariance.
+:-------------------------:|:-------------------------:
+![](./results/gh/histograms.png)  |  ![](./results/gh/heavy_tailedness_and_covariance.png)
 
 <!-- ## Usage
 To install the package in an editable mode and forego any import errors, run:
