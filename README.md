@@ -12,23 +12,18 @@ This code is for our **study of the optimization trajectories of learned vs. tra
 - Similarly to Lion, **learned optimizers break the geometric constraints on gradients** that stem from architectural symmetries and that deviations from these constraints are significantly larger than those observed with previous optimizers like Adam or SGD (Figure 4). In the case of learned optimizers, we observe that a large deviation from these geometric constraints almost always accompanies the initial rapid decrease in loss during optimization. More importantly, **regularizing against this symmetry breaking during meta-training severely damages performance**, hinting at the importance of this freedom in L2O parameter updates.
 - In another experiment, we also see that the increasing symmetry breaking of the *Lion-SGD* optimizer (interpolation between Lion and SGD parameter updates) correlates with an increase in performance. This indicates that **breaking the strict geometric constraints might be beneficial not only for L2O but also for more traditional, manually designed optimization
 algorithms**.
-<p align="center">
-    <img src="./results/gh/sym_breaking.png" width="32%" alt="Symmetry breaking" />
-    <img src="./results/gh/sym_regularization.png" width="32%"  alt="Regularization against the symmetry breaking" />
-    <img src="./results/gh/lion_sgd.png" width="32%"  alt="Lion-SGD interpolation optimizer" />
-</p>
+
+Figure 4: Deviations from the geometric constraints on gradients. | Figure 5: Performance after the symmetry breaking regularization. | Figure 7: Symmetry breaking and the performance of the *Lion-SGD* optimizer.
+:---:|:---:|:---:
+![Symmetry breaking](./results/gh/sym_breaking.png)  |  ![Regularization against the symmetry breaking](./results/gh/sym_regularization.png)  |  ![Lion-SGD interpolation optimizer](./results/gh/lion_sgd.png)
 
 - Additionally, on the Figure 9 below, one can notice that the **L2O starts with the largest updates** and then slowly approaches the update distribution of Adam.
 - Furthermore, by studying the noise and covariance in the L2O parameter updates, we demonstrate that, on the one hand, **L2O updates exhibit less heavy-tailed stochastic noise** (Figure 8, left; higher alpha - less heavy-tailed), and, on the other hand, **the variation in updates across different samples is larger**. This less heavy-tailed distribution of L2O updates despite the gradients exhibiting very heavy-tailed behavior, together with the high variation of updates across different samples, points to one interesting observation: **L2O appears to act as a stabilizing force in the optimization process**. While the inherent stochasticity and heavy-tailed nature of gradients might lead to erratic updates and
 slow convergence, the noise clipping of L2O seems to mitigate these issues.
-<!-- <p align="center">
-    <img src="./results/gh/histograms.png" width="48%"  alt="Histograms of the absolute values of parameter updates" />
-    <img src="./results/gh/heavy_tailedness_and_covariance.png" width="48%" alt="Heavy-tailedness and update covariance" />
-</p> -->
 
-Figure 9: Histograms of the absolute values of parameter updates.             |  Figure 8: Heavy-tailedness and update covariance.
-:-------------------------:|:-------------------------:
-![](./results/gh/histograms.png)  |  ![](./results/gh/heavy_tailedness_and_covariance.png)
+Figure 9: Histograms of the absolute values of parameter updates. | Figure 8: Heavy-tailedness and update covariance.
+:---:|:---:
+![Histograms of the parameter update values](./results/gh/histograms.png)  |  ![Heavy-tailedness and update covariance](./results/gh/heavy_tailedness_and_covariance.png)
 
 <!-- ## Usage
 To install the package in an editable mode and forego any import errors, run:
